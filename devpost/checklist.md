@@ -19,7 +19,7 @@ Build mode: learn
   Learner check: Run `python main.py`. Does the window open? Does it look like what you had in mind — dark background, two table sections, the header and footer? Note anything that doesn't match.
   Commit: `Scaffold project and open native dashboard window`
 
-- [ ] **2. Watchlist API — load and edit from the UI**
+- [x] **2. Watchlist API — load and edit from the UI**
   Becomes usable: The status bar populates with the current watchlist on load. The settings panel opens, shows current tickers, lets you add/remove, and saves — config.json updates and the status bar reflects the change immediately.
   Why now: The watchlist is the input to every scan. Getting it working and persisted before scan logic means scan slices can use the real watchlist from the start. It also exercises the full Flask API + JS fetch round-trip cleanly on a simple endpoint before the heavy scan logic.
   PRD ref: `prd.md > Watchlist Management`, `prd.md > States and Boundaries`
