@@ -84,11 +84,11 @@ Build mode: learn
 ## Hands-on Checkpoints
 
 - [x] Early feedback after slice 1 — native window opens and dashboard looks right (shapes remaining build decisions about layout/styling)
-- [ ] Final kick-the-tires exploration and feedback completed
+- [x] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
 
-- [ ] Final review complete — feedback resolved and learner confirms ready to ship
+- [x] Final review complete — feedback resolved and learner confirms ready to ship
 
 ## Code Tour and App Map
 
@@ -105,3 +105,4 @@ Activity mode: [live app and editor, explicit static fallback, focused alternati
 ## Revisions
 
 - `pandas-ta` unavailable on PyPI for Python 3.10+ — replaced with `ta==0.11.0`, which covers MACD, Bollinger Bands, and RSI via a clean pandas API. Candlestick pattern detection uses manual OHLCV math throughout (already the specced fallback). No functional impact.
+- Signal strings now include candle date and a `⚠ stale` flag — discovered during final review when BTC showed a Bearish Doji from a prior day's candle. Both pattern_detector and indicator_detector updated; scorer keyword classifier verified robust to new format.
