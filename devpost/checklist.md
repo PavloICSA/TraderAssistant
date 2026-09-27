@@ -39,7 +39,7 @@ Build mode: learn
   Learner check: Run `python screener/data_fetcher.py`. Do you see real price data for AAPL, MSFT, etc.? Note if any ticker fails or returns unexpected data.
   Commit: `Add yfinance data fetcher with daily and 1h OHLCV fetch`
 
-- [ ] **4. Pattern detector — candlestick pattern detection**
+- [x] **4. Pattern detector — candlestick pattern detection**
   Becomes usable: Given an OHLCV DataFrame, `pattern_detector.py` detects all 8 candlestick patterns and returns a list of fired signal strings with timeframe labels.
   Why now: Pattern detection is the core analytical kernel. Getting it working and verified on real data (from slice 3) before wiring it into the scan pipeline means the scan slice can trust its inputs.
   PRD ref: `prd.md > Candlestick Patterns in Scope`
