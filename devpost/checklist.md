@@ -49,7 +49,7 @@ Build mode: learn
   Learner check: Run the script. Do any patterns fire? Pick one result and look at the raw candle data — does the signal make sense given what you see in Open/High/Low/Close?
   Commit: `Add candlestick pattern detector (8 patterns, dual timeframe)`
 
-- [ ] **5. Indicator detector — MACD, Bollinger Bands, RSI**
+- [x] **5. Indicator detector — MACD, Bollinger Bands, RSI**
   Becomes usable: Given an OHLCV DataFrame, `indicator_detector.py` detects all 6 indicator signals (MACD crossover bull/bear, BB lower/upper touch, RSI oversold/overbought) and returns fired signal strings with timeframe labels.
   Why now: Completes the analysis layer. Pattern + indicator detectors together are everything the scorer needs; building them separately keeps each verifiable in isolation.
   PRD ref: `prd.md > Indicator Signals in Scope`

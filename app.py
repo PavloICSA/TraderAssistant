@@ -5,7 +5,13 @@ Serves the static UI and exposes /api/watchlist and /api/scan endpoints.
 
 import json
 import os
+from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory
+
+from screener.data_fetcher       import fetch_daily, fetch_1h, DataFetchError
+from screener.pattern_detector   import detect_patterns
+from screener.indicator_detector import detect_indicators
+from screener.scorer             import score_tickers
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -76,15 +82,58 @@ def put_watchlist():
 @app.route("/api/scan", methods=["POST"])
 def post_scan():
     """
-    Run the full screener pipeline.
-    Placeholder for slice 1 — returns empty results.
-    Implemented in slice 6.
+    Run the full screener pipeline:
+      1. Read watchlist from config.json
+      2. Fetch daily + 1h OHLCV via yfinance
+      3. Detect candlestick patterns on both timeframes
+      4. Detect indicator signals on both timeframes
+      5. Score and rank tickers
+      6. Return JSON with long/short lists and timestamp
+
+    Implements: prd.md > Scan Trigger, prd.md > Results Display
+    Spec ref:   spec.md > POST /api/scan, spec.md > screener/scorer.py
     """
-    return jsonify({
-        "long": [],
-        "short": [],
-        "timestamp": ""
-    })
+    try:
+        config  = _read_config()
+        tickers = config.get("tickers", [])
+
+        if not tickers:
+            return jsonify({"error": "Watchlist is empty — add tickers to get started."}), 400
+
+        # --- Fetch data ---
+        try:
+            daily_data  = fetch_daily(tickers)
+            hourly_data = fetch_1h(tickers)
+        except DataFetchError as e:
+            return jsonify({"error": f"Unable to fetch data from Yahoo Finance. {e}"}), 500
+
+        # --- Detect patterns and indicators on both timeframes ---
+        pattern_sigs   = {}
+        indicator_sigs = {}
+
+        for ticker in tickers:
+            pattern_sigs[ticker] = (
+                detect_patterns(daily_data.get(ticker),  "daily") +
+                detect_patterns(hourly_data.get(ticker), "1h")
+            )
+            indicator_sigs[ticker] = (
+                detect_indicators(daily_data.get(ticker),  "daily") +
+                detect_indicators(hourly_data.get(ticker), "1h")
+            )
+
+        # --- Score and rank ---
+        ranked = score_tickers(pattern_sigs, indicator_sigs, hourly_data)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        return jsonify({
+            "long":      ranked["long"],
+            "short":     ranked["short"],
+            "timestamp": timestamp,
+        })
+
+    except Exception as e:
+        return jsonify({"error": f"Scan failed: {str(e)}"}), 500
 
 
 # ---------------------------------------------------------------------------
