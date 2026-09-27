@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Multi-Timeframe Stock Screener</title>
+  <style>
+    /* ------------------------------------------------------------------ */
+    /* Reset & base                                                         */
+    /* ------------------------------------------------------------------ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:           #0f1117;
+      --surface:      #1a1d27;
+      --surface-alt:  #222638;
+      --border:       #2d3144;
+      --text:         #e2e8f0;
+      --text-muted:   #94a3b8;
+      --text-faint:   #64748b;
+      --green:        #22c55e;
+      --green-dim:    #166534;
+      --red:          #ef4444;
+      --red-dim:      #7f1d1d;
+      --accent:       #3b82f6;
+      --accent-hover: #2563eb;
+      --mono:         'Courier New', 'Consolas', monospace;
+      --sans:         -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Layout                                                               */
+    /* ------------------------------------------------------------------ */
+    .app {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Header                                                               */
+    /* ------------------------------------------------------------------ */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    #btn-scan {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 18px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    #btn-scan:hover:not(:disabled) { background: var(--accent-hover); }
+    #btn-scan:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* spinner ring */
+    .spinner {
+      display: none;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #status-bar {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-faint);
+      white-space: nowrap;
+      flex-wrap: wrap;
+    }
+
+    #status-timestamp { font-variant-numeric: tabular-nums; }
+
+    #status-watchlist {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    #btn-settings {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    #btn-settings:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ------------------------------------------------------------------ */
+    /* Error banner                                                         */
+    /* ------------------------------------------------------------------ */
+    #error-banner {
+      display: none;
+      background: #450a0a;
+      border-bottom: 1px solid #7f1d1d;
+      padding: 10px 24px;
+      color: #fca5a5;
+      font-size: 13px;
+      align-items: center;
+      gap: 10px;
+    }
+    #error-banner.visible { display: flex; }
+    #error-text { flex: 1; }
+    #btn-dismiss-error {
+      background: transparent;
+      border: none;
+      color: #fca5a5;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Main content — two-column grid                                       */
+    /* ------------------------------------------------------------------ */
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 20px 24px;
+    }
+
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Table cards                                                          */
+    /* ------------------------------------------------------------------ */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .table-card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-card-header h2 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: var(--mono);
+    }
+
+    .badge-long  { background: var(--green-dim);  color: var(--green); }
+    .badge-short { background: var(--red-dim);    color: var(--red);   }
+
+    .card-long  .table-card-header h2 { color: var(--green); }
+    .card-short .table-card-header h2 { color: var(--red);   }
+
+    /* count pill */
+    .result-count {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-faint);
+      font-family: var(--mono);
+    }
+
+    /* scrollable table wrapper */
+    .table-wrapper {
+      overflow-y: auto;
+      flex: 1;
+      max-height: calc(100vh - 220px);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--surface-alt);
+      padding: 8px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    thead th.col-score  { width: 70px; text-align: center; }
+    thead th.col-ticker { width: 80px; }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: var(--surface-alt); }
+
+    td {
+      padding: 9px 12px;
+      vertical-align: top;
+    }
+
+    .td-ticker {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .td-score {
+      text-align: center;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .score-long  { color: var(--green); }
+    .score-short { color: var(--red);   }
+
+    .td-signals {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .signal-tag {
+      display: inline-block;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1px 6px;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--text-muted);
+      margin: 1px 2px 1px 0;
+      white-space: nowrap;
+    }
+
+    /* empty state row */
+    .empty-row td {
+      text-align: center;
+      padding: 32px 16px;
+      color: var(--text-faint);
+      font-size: 13px;
+      font-style: italic;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Footer                                                               */
+    /* ------------------------------------------------------------------ */
+    footer {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 10px 24px;
+      font-size: 11px;
+      color: var(--text-faint);
+      line-height: 1.6;
+    }
+
+    footer strong { color: var(--text-muted); }
+
+    /* ------------------------------------------------------------------ */
+    /* Modal overlay                                                        */
+    /* ------------------------------------------------------------------ */
+    #modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-overlay.visible { display: flex; }
+
+    #modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 420px;
+      max-width: 95vw;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    #modal h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    #modal p.modal-hint {
+      font-size: 12px;
+      color: var(--text-faint);
+      margin-top: -8px;
+    }
+
+    #ticker-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-height: 36px;
+    }
+
+    .ticker-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .ticker-chip button {
+      background: transparent;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      transition: color 0.1s;
+    }
+    .ticker-chip button:hover { color: var(--red); }
+
+    .add-ticker-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #input-ticker {
+      flex: 1;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 7px 10px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #input-ticker:focus { border-color: var(--accent); }
+    #input-ticker::placeholder { color: var(--text-faint); font-weight: 400; text-transform: none; font-family: var(--sans); }
+
+    #btn-add-ticker {
+      padding: 7px 14px;
+      background: var(--surface-alt);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    #btn-add-ticker:hover { border-color: var(--accent); color: var(--accent); }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .btn-secondary {
+      padding: 7px 16px;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .btn-secondary:hover { border-color: var(--text-muted); }
+
+    .btn-primary {
+      padding: 7px 18px;
+      background: var(--accent);
+      border: none;
+      border-radius: 5px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    #modal-error {
+      font-size: 12px;
+      color: #fca5a5;
+      display: none;
+    }
+    #modal-error.visible { display: block; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ================================================================ -->
+  <!-- Header                                                            -->
+  <!-- ================================================================ -->
+  <header>
+    <h1>Multi-Timeframe Stock Screener</h1>
+
+    <button id="btn-scan" onclick="runScan()">
+      <span class="spinner" id="scan-spinner"></span>
+      <span id="scan-btn-text">Run Fresh Scan</span>
+    </button>
+
+    <div id="status-bar">
+      <span id="status-timestamp">No scan yet</span>
+      <span>·</span>
+      <span id="status-watchlist">Loading watchlist…</span>
+      <button id="btn-settings" onclick="openSettings()">⚙ Watchlist</button>
+    </div>
+  </header>
+
+  <!-- ================================================================ -->
+  <!-- Error banner                                                      -->
+  <!-- ================================================================ -->
+  <div id="error-banner" role="alert">
+    <span id="error-text"></span>
+    <button id="btn-dismiss-error" onclick="hideError()" aria-label="Dismiss error">×</button>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Main — two table cards                                            -->
+  <!-- ================================================================ -->
+  <main>
+
+    <!-- LONG table -->
+    <div class="table-card card-long">
+      <div class="table-card-header">
+        <span class="badge badge-long">LONG</span>
+        <h2>Strong Long Opportunities</h2>
+        <span class="result-count" id="long-count"></span>
+      </div>
+      <div class="table-wrapper">
+        <table aria-label="Long opportunities">
+          <thead>
+            <tr>
+              <th class="col-ticker">Ticker</th>
+              <th class="col-score">Score</th>
+              <th>Triggered Signals / Reasoning</th>
+            </tr>
+          </thead>
+          <tbody id="long-tbody">
+            <tr class="empty-row">
+              <td colspan="3">No data yet — run a scan to get started.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SHORT table -->
+    <div class="table-card card-short">
+      <div class="table-card-header">
+        <span class="badge badge-short">SHORT</span>
+        <h2>Strong Short Opportunities</h2>
+        <span class="result-count" id="short-count"></span>
+      </div>
+      <div class="table-wrapper">
+        <table aria-label="Short opportunities">
+          <thead>
+            <tr>
+              <th class="col-ticker">Ticker</th>
+              <th class="col-score">Score</th>
+              <th>Triggered Signals / Reasoning</th>
+            </tr>
+          </thead>
+          <tbody id="short-tbody">
+            <tr class="empty-row">
+              <td colspan="3">No data yet — run a scan to get started.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================================================================ -->
+  <!-- Footer                                                            -->
+  <!-- ================================================================ -->
+  <footer>
+    <strong>Scoring:</strong>
+    +1 per bullish confirmation (candlestick pattern, MACD bullish crossover, lower BB touch, RSI&nbsp;&lt;&nbsp;30),
+    −1 per bearish confirmation (bearish pattern, MACD bearish crossover, upper BB touch, RSI&nbsp;&gt;&nbsp;70).
+    Each signal scored independently on <strong>Daily</strong> (trend context) and <strong>1h</strong> (entry trigger) timeframes.
+    Higher absolute score = stronger confluence.
+  </footer>
+
+</div><!-- /.app -->
+
+<!-- ================================================================== -->
+<!-- Watchlist modal                                                     -->
+<!-- ================================================================== -->
+<div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div id="modal">
+    <h3 id="modal-title">Edit Watchlist</h3>
+    <p class="modal-hint">Add or remove ticker symbols. Changes take effect on the next scan.</p>
+
+    <div id="ticker-list" aria-label="Current tickers"></div>
+
+    <div class="add-ticker-row">
+      <input id="input-ticker" type="text" placeholder="Add ticker (e.g. AMZN)"
+             maxlength="10" autocomplete="off" spellcheck="false"
+             onkeydown="if(event.key==='Enter') addTicker()" />
+      <button id="btn-add-ticker" onclick="addTicker()">Add</button>
+    </div>
+
+    <span id="modal-error" role="alert"></span>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeSettings()">Cancel</button>
+      <button class="btn-primary" onclick="saveWatchlist()">Save Watchlist</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
+<!-- JavaScript                                                          -->
+<!-- ================================================================== -->
+<script>
+  // ------------------------------------------------------------------ //
+  // State                                                               //
+  // ------------------------------------------------------------------ //
+  let _currentTickers = [];   // live copy while modal is open
+  let _lastResults = null;    // retained on scan failure
+
+  // ------------------------------------------------------------------ //
+  // Init                                                                //
+  // ------------------------------------------------------------------ //
+  document.addEventListener('DOMContentLoaded', loadWatchlist);
+
+  // ------------------------------------------------------------------ //
+  // Watchlist                                                           //
+  // ------------------------------------------------------------------ //
+  async function loadWatchlist() {
+    try {
+      const res = await fetch('/api/watchlist');
+      const data = await res.json();
+      _updateStatusWatchlist(data.tickers || []);
+    } catch (e) {
+      document.getElementById('status-watchlist').textContent = 'Watchlist unavailable';
+    }
+  }
+
+  function _updateStatusWatchlist(tickers) {
+    const el = document.getElementById('status-watchlist');
+    el.textContent = tickers.length
+      ? 'Watchlist: ' + tickers.join(', ')
+      : 'Watchlist: (empty)';
+  }
+
+  function openSettings() {
+    fetch('/api/watchlist')
+      .then(r => r.json())
+      .then(data => {
+        _currentTickers = [...(data.tickers || [])];
+        _renderTickerChips();
+        document.getElementById('modal-error').classList.remove('visible');
+        document.getElementById('input-ticker').value = '';
+        document.getElementById('modal-overlay').classList.add('visible');
+        document.getElementById('input-ticker').focus();
+      })
+      .catch(() => showError('⚠️ Could not load watchlist settings.'));
+  }
+
+  function closeSettings() {
+    document.getElementById('modal-overlay').classList.remove('visible');
+  }
+
+  function _renderTickerChips() {
+    const container = document.getElementById('ticker-list');
+    container.innerHTML = '';
+    if (_currentTickers.length === 0) {
+      container.innerHTML = '<span style="color:var(--text-faint);font-size:12px;font-style:italic;">No tickers — add one above.</span>';
+      return;
+    }
+    _currentTickers.forEach((ticker, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'ticker-chip';
+      chip.innerHTML = `${ticker}
+        <button onclick="removeTicker(${idx})" aria-label="Remove ${ticker}">×</button>`;
+      container.appendChild(chip);
+    });
+  }
+
+  function addTicker() {
+    const input = document.getElementById('input-ticker');
+    const val = input.value.trim().toUpperCase();
+    const errEl = document.getElementById('modal-error');
+    errEl.classList.remove('visible');
+
+    if (!val) return;
+    if (!/^[A-Z0-9.\-^]{1,10}$/.test(val)) {
+      errEl.textContent = 'Invalid ticker symbol.';
+      errEl.classList.add('visible');
+      return;
+    }
+    if (_currentTickers.includes(val)) {
+      errEl.textContent = `${val} is already in the watchlist.`;
+      errEl.classList.add('visible');
+      return;
+    }
+    _currentTickers.push(val);
+    _renderTickerChips();
+    input.value = '';
+    input.focus();
+  }
+
+  function removeTicker(idx) {
+    _currentTickers.splice(idx, 1);
+    _renderTickerChips();
+  }
+
+  async function saveWatchlist() {
+    const errEl = document.getElementById('modal-error');
+    errEl.classList.remove('visible');
+
+    if (_currentTickers.length === 0) {
+      errEl.textContent = 'Watchlist must contain at least one ticker.';
+      errEl.classList.add('visible');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/watchlist', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tickers: _currentTickers })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      _updateStatusWatchlist(data.tickers);
+      closeSettings();
+    } catch (e) {
+      errEl.textContent = '⚠️ ' + e.message;
+      errEl.classList.add('visible');
+    }
+  }
+
+  // ------------------------------------------------------------------ //
+  // Scan                                                                //
+  // ------------------------------------------------------------------ //
+  async function runScan() {
+    const btn       = document.getElementById('btn-scan');
+    const spinner   = document.getElementById('scan-spinner');
+    const btnText   = document.getElementById('scan-btn-text');
+
+    hideError();
+    btn.disabled    = true;
+    spinner.style.display = 'inline-block';
+    btnText.textContent   = 'Scanning markets…';
+
+    try {
+      const res  = await fetch('/api/scan', { method: 'POST' });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Scan failed');
+
+      _lastResults = data;
+      renderTable('long-tbody',  'long-count',  data.long,  'long');
+      renderTable('short-tbody', 'short-count', data.short, 'short');
+
+      const ts = data.timestamp || new Date().toLocaleTimeString();
+      document.getElementById('status-timestamp').textContent = 'Last scan: ' + ts;
+
+    } catch (e) {
+      showError('⚠️ Scan failed: ' + e.message + '. Please check your connection and try again.');
+      // retain last results — tables are untouched
+    } finally {
+      btn.disabled          = false;
+      spinner.style.display = 'none';
+      btnText.textContent   = 'Run Fresh Scan';
+    }
+  }
+
+  // ------------------------------------------------------------------ //
+  // Table rendering                                                     //
+  // ------------------------------------------------------------------ //
+  function renderTable(tbodyId, countId, rows, side) {
+    const tbody = document.getElementById(tbodyId);
+    const countEl = document.getElementById(countId);
+    tbody.innerHTML = '';
+
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="3">No ${side === 'long' ? 'bullish' : 'bearish'} setups detected.</td></tr>`;
+      countEl.textContent = '';
+      return;
+    }
+
+    countEl.textContent = rows.length + (rows.length === 1 ? ' result' : ' results');
+
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+
+      const scoreClass = side === 'long' ? 'score-long' : 'score-short';
+      const scoreDisplay = side === 'long'
+        ? '+' + row.score
+        : row.score;  // already negative
+
+      const signalTags = (row.signals || [])
+        .map(s => `<span class="signal-tag">${_escHtml(s)}</span>`)
+        .join(' ');
+
+      tr.innerHTML = `
+        <td class="td-ticker">${_escHtml(row.ticker)}</td>
+        <td class="td-score ${scoreClass}">${scoreDisplay}</td>
+        <td class="td-signals">${signalTags || '<span style="color:var(--text-faint)">—</span>'}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ------------------------------------------------------------------ //
+  // Error banner                                                        //
+  // ------------------------------------------------------------------ //
+  function showError(msg) {
+    document.getElementById('error-text').textContent = msg;
+    document.getElementById('error-banner').classList.add('visible');
+  }
+
+  function hideError() {
+    document.getElementById('error-banner').classList.remove('visible');
+  }
+
+  // ------------------------------------------------------------------ //
+  // Utilities                                                           //
+  // ------------------------------------------------------------------ //
+  function _escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>

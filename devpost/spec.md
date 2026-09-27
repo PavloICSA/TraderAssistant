@@ -74,7 +74,7 @@ PRD ref: `prd.md > The Core Journey`
 | Desktop window | `pywebview` 4.x | Native OS window, no browser; wraps HTML/CSS/JS frontend |
 | Backend server | `Flask` 3.x | Lightweight local HTTP server; simple routing, no async overhead |
 | Data fetching | `yfinance` 0.2.x | Free Yahoo Finance OHLCV; supports daily and 1h natively |
-| Technical analysis | `pandas-ta` 0.3.x | Pandas-native MACD, Bollinger Bands, and candlestick patterns |
+| Technical analysis | `ta` 0.11.0 | pandas-ta unavailable on PyPI for Python 3.10+; `ta` covers MACD, Bollinger Bands, and RSI with a clean pandas API |
 | Data manipulation | `pandas` 2.x | DataFrame operations for resampling, slicing, signal logic |
 | Frontend | Vanilla HTML/CSS/JS | No build step, no framework; full visual control |
 | Config persistence | JSON file (`config.json`) | Simple, human-readable, no database needed for a watchlist |
@@ -83,7 +83,7 @@ PRD ref: `prd.md > The Core Journey`
 - pywebview: https://pywebview.flowrl.com/
 - Flask: https://flask.palletsprojects.com/
 - yfinance: https://github.com/ranaroussi/yfinance
-- pandas-ta: https://github.com/twopirllc/pandas-ta
+- ta: https://github.com/bukosabino/ta
 - pandas: https://pandas.pydata.org/docs/
 
 **Tradeoff accepted:** Flask + pywebview run in the same Python process using threading (Flask on a background thread, pywebview on the main thread). This is the standard pattern for pywebview + Flask and is well-documented, but means the app is single-user local only — which is exactly the PoC requirement.

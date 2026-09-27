@@ -1,3 +1,12 @@
+# Environment
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
 # Personal learning context — keep out of commits by default
 devpost/learner-profile.md
 
@@ -5,3 +14,6 @@ devpost/learner-profile.md
 .env
 .env.*
 !.env.example
+
+# Config (contains personal watchlist)
+config.json
