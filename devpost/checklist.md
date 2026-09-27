@@ -59,7 +59,7 @@ Build mode: learn
   Learner check: Run the script. Do any indicator signals fire? Check the RSI value for a ticker — does the oversold/overbought classification look right given the number?
   Commit: `Add indicator detector (MACD, Bollinger Bands, RSI)`
 
-- [ ] **6. Scorer + full scan pipeline wired to the UI**
+- [x] **6. Scorer + full scan pipeline wired to the UI**
   Becomes usable: Click "Run Fresh Scan" → the app fetches real data, detects patterns and indicators on both timeframes, scores each ticker, and populates the LONG and SHORT tables with real results, reasoning, and scores. The full end-to-end product works.
   Why now: This is the unique kernel — the confluence scorer turning multi-signal analysis into a ranked actionable table. Everything before this was preparation; this is the moment the product exists.
   PRD ref: `prd.md > Results Display`, `prd.md > Scan Trigger`, `prd.md > States and Boundaries`
