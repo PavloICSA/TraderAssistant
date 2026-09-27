@@ -29,7 +29,7 @@ Build mode: learn
   Learner check: Open the app, click the settings icon, add a ticker, save. Does the status bar update? Open `config.json` in a text editor — is your new ticker there?
   Commit: `Add watchlist API and UI editor with persistence`
 
-- [ ] **3. Data fetcher — real OHLCV from yfinance**
+- [x] **3. Data fetcher — real OHLCV from yfinance**
   Becomes usable: A standalone script (or Flask endpoint used for testing) fetches real daily and 1h OHLCV data for the watchlist tickers and prints the shape of each DataFrame. Proves yfinance returns the expected data format before any analysis logic is built on top of it.
   Why now: The entire analysis pipeline depends on yfinance returning the right DataFrame shape. Verifying this in isolation means pattern/indicator logic won't be debugging a data-fetch problem at the same time. This is the second risky external dependency after pywebview.
   PRD ref: `prd.md > Scan Trigger`
