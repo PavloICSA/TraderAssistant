@@ -92,15 +92,15 @@ Build mode: learn
 
 ## Code Tour and App Map
 
-- [ ] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
-- [ ] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
-- [ ] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
+- [x] Learning activity complete — guided route, focused alternative, prior practice connected, or brief recap
+- [x] Optional edit and transfer reflection addressed — offered/declined/already covered/not applicable as appropriate
+- [x] `devpost/app-map.html` generated from finished code, checked, and shown, including a project-grounded practice to reuse
 
-Activity and evidence: [what actually happened; real document/test/code references; unfinished work if interrupted]
-Route and stops: [actual paths and symbols; guided stops completed, or reference-only route]
-Edit outcome: [tried/kept/reverted/declined/not applicable; verification if changed]
-Reflection: [offered/answered/declined/already covered — personal answer belongs only in the ignored profile]
-Activity mode: [live app and editor, explicit static fallback, focused alternative, prior practice, or recap]
+Activity and evidence: Focused alternative — connected spec precision to scorer implementation (spec.md > POST /api/scan response shape maps directly to scorer.py return type and JS renderTable); yfinance MultiIndex flatten pattern identified as reusable practice. Real code references used throughout.
+Route and stops: Reference-only route in app-map.html (6-stop journey from runScan() through data_fetcher → pattern_detector → indicator_detector → scorer → dashboard render).
+Edit outcome: Date/staleness label fix applied during final review (candle date + ⚠ stale flag added to all signal strings). Verified and committed.
+Reflection: Learning goals directly served — spec-to-build precision demonstrated through scorer implementation; yfinance and ta library hands-on completed across slices 3–5.
+Activity mode: Focused alternative (experienced technical background; spec precision connected to actual build friction points).
 
 ## Revisions
 
