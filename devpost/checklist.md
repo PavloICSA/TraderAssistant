@@ -9,7 +9,7 @@ Build mode: learn
 
 ## Slices
 
-- [ ] **1. Scaffold + native window opens with static dashboard**
+- [x] **1. Scaffold + native window opens with static dashboard**
   Becomes usable: Run `python main.py` → a native desktop window opens showing the static HTML dashboard shell (header, two empty tables, footer). No scan logic yet — just proof the pywebview + Flask threading pattern works on this machine.
   Why now: The pywebview + Flask thread combination is the highest-risk unknown in the stack. Proving it works first means every later slice has a confirmed foundation. Bootstrap and scaffold are baked in here, not a separate step.
   PRD ref: `prd.md > The Core Journey` (steps 1–2)
@@ -83,7 +83,7 @@ Build mode: learn
 
 ## Hands-on Checkpoints
 
-- [ ] Early feedback after slice 1 — native window opens and dashboard looks right (shapes remaining build decisions about layout/styling)
+- [x] Early feedback after slice 1 — native window opens and dashboard looks right (shapes remaining build decisions about layout/styling)
 - [ ] Final kick-the-tires exploration and feedback completed
 
 ## Final Review
