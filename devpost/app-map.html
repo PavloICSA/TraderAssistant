@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Map — Multi-Timeframe Stock Screener</title>
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --border: #2d3144;
+      --text: #e2e8f0; --muted: #94a3b8; --faint: #64748b;
+      --green: #22c55e; --red: #ef4444; --blue: #3b82f6; --yellow: #f59e0b;
+      --mono: 'Courier New', monospace;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans);
+           font-size: 14px; line-height: 1.6; padding: 32px 24px; max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 32px; }
+    h2 { font-size: 14px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+         color: var(--muted); margin: 32px 0 12px; }
+    p { color: var(--muted); margin-bottom: 12px; }
+    code { font-family: var(--mono); font-size: 12px; background: var(--surface);
+           border: 1px solid var(--border); border-radius: 3px; padding: 1px 5px; color: var(--text); }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ---- Data flow diagram ---- */
+    .diagram-wrap { background: var(--surface); border: 1px solid var(--border);
+                    border-radius: 8px; padding: 24px; margin-bottom: 24px; overflow-x: auto; }
+    svg text { font-family: var(--sans); }
+
+    /* ---- File route cards ---- */
+    .route { display: flex; flex-direction: column; gap: 0; margin-bottom: 24px; }
+    .step { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-bottom: none; }
+    .step:first-child { border-radius: 8px 8px 0 0; }
+    .step:last-child  { border-bottom: 1px solid var(--border); border-radius: 0 0 8px 8px; }
+    .step-num { background: var(--blue); color: #fff; border-radius: 50%;
+                width: 22px; height: 22px; display: flex; align-items: center;
+                justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+    .step-body { flex: 1; }
+    .step-body strong { font-size: 13px; color: var(--text); }
+    .step-body p { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+
+    /* ---- File tree ---- */
+    .file-tree { background: var(--surface); border: 1px solid var(--border);
+                 border-radius: 8px; padding: 16px 20px; font-family: var(--mono);
+                 font-size: 12px; color: var(--muted); line-height: 1.8; }
+    .file-tree .hl { color: var(--text); }
+    .file-tree .dim { color: var(--faint); }
+
+    /* ---- Change-here pointers ---- */
+    .pointer-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+    .pointer { background: var(--surface); border: 1px solid var(--border);
+               border-left: 3px solid var(--yellow); border-radius: 6px; padding: 10px 14px; }
+    .pointer .label { font-size: 12px; font-weight: 700; color: var(--yellow); margin-bottom: 4px; }
+    .pointer p { font-size: 12px; color: var(--muted); margin: 0; }
+
+    /* ---- Practice note ---- */
+    .practice { background: var(--surface); border: 1px solid var(--border);
+                border-left: 3px solid var(--green); border-radius: 6px; padding: 16px 20px; margin-bottom: 24px; }
+    .practice h3 { font-size: 13px; font-weight: 700; color: var(--green); margin-bottom: 8px; }
+    .practice p { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    .practice p:last-child { margin-bottom: 0; }
+
+    /* ---- Run box ---- */
+    .run-box { background: var(--surface); border: 1px solid var(--border);
+               border-radius: 8px; padding: 14px 20px; font-family: var(--mono);
+               font-size: 13px; color: var(--green); }
+
+    /* ---- details reveals ---- */
+    details { background: var(--surface); border: 1px solid var(--border);
+              border-radius: 6px; margin-bottom: 10px; }
+    summary { padding: 10px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+              color: var(--text); list-style: none; user-select: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::before { content: '▶  '; font-size: 10px; color: var(--muted); }
+    details[open] summary::before { content: '▼  '; }
+    .details-body { padding: 0 14px 14px; font-size: 12px; color: var(--muted); line-height: 1.7; }
+    .details-body code { font-size: 11px; }
+  </style>
+</head>
+<body>
+
+  <h1>Multi-Timeframe Stock Screener — App Map</h1>
+  <p class="subtitle">Snapshot at commit <code>35878e5</code> · Generated after final review · Use as a reference, not a guarantee — code may drift.</p>
+
+  <!-- ================================================================ -->
+  <h2>What this app does</h2>
+  <p>A Python desktop tool that fetches real stock price data, detects candlestick patterns and indicator signals across two timeframes (daily trend + 1h entry trigger), scores each ticker by confluence, and surfaces ranked <strong style="color:var(--green)">LONG</strong> and <strong style="color:var(--red)">SHORT</strong> opportunities in a native desktop window — no browser required.</p>
+
+  <!-- ================================================================ -->
+  <h2>Data flow — one scan, end to end</h2>
+
+  <div class="diagram-wrap">
+    <svg viewBox="0 0 820 260" width="100%" xmlns="http://www.w3.org/2000/svg">
+      <!-- boxes -->
+      <!-- User -->
+      <rect x="10"  y="100" width="90"  height="60" rx="6" fill="#1a1d27" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="55"  y="125" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">User</text>
+      <text x="55"  y="141" text-anchor="middle" fill="#94a3b8" font-size="10">Run Fresh Scan</text>
+
+      <!-- HTML UI -->
+      <rect x="135" y="100" width="100" height="60" rx="6" fill="#1a1d27" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="185" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">ui/index.html</text>
+      <text x="185" y="138" text-anchor="middle" fill="#94a3b8" font-size="10">POST /api/scan</text>
+      <text x="185" y="152" text-anchor="middle" fill="#64748b" font-size="9">fetch() → JSON</text>
+
+      <!-- Flask -->
+      <rect x="268" y="100" width="100" height="60" rx="6" fill="#1a1d27" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="318" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">app.py</text>
+      <text x="318" y="138" text-anchor="middle" fill="#94a3b8" font-size="10">Flask /api/scan</text>
+      <text x="318" y="152" text-anchor="middle" fill="#64748b" font-size="9">orchestrates pipeline</text>
+
+      <!-- data_fetcher -->
+      <rect x="400" y="20" width="110" height="55" rx="6" fill="#1a1d27" stroke="#2d3144" stroke-width="1.5"/>
+      <text x="455" y="42"  text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">data_fetcher</text>
+      <text x="455" y="57"  text-anchor="middle" fill="#94a3b8" font-size="10">yfinance</text>
+      <text x="455" y="70"  text-anchor="middle" fill="#64748b" font-size="9">daily + 1h OHLCV</text>
+
+      <!-- pattern_detector -->
+      <rect x="400" y="100" width="110" height="55" rx="6" fill="#1a1d27" stroke="#2d3144" stroke-width="1.5"/>
+      <text x="455" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">pattern_detector</text>
+      <text x="455" y="137" text-anchor="middle" fill="#94a3b8" font-size="10">8 patterns</text>
+      <text x="455" y="150" text-anchor="middle" fill="#64748b" font-size="9">OHLCV math</text>
+
+      <!-- indicator_detector -->
+      <rect x="400" y="180" width="110" height="55" rx="6" fill="#1a1d27" stroke="#2d3144" stroke-width="1.5"/>
+      <text x="455" y="202" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">indicator_detector</text>
+      <text x="455" y="217" text-anchor="middle" fill="#94a3b8" font-size="10">MACD · BB · RSI</text>
+      <text x="455" y="230" text-anchor="middle" fill="#64748b" font-size="9">ta library</text>
+
+      <!-- scorer -->
+      <rect x="545" y="100" width="100" height="60" rx="6" fill="#1a1d27" stroke="#2d3144" stroke-width="1.5"/>
+      <text x="595" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">scorer</text>
+      <text x="595" y="138" text-anchor="middle" fill="#22c55e" font-size="10">+1 bullish</text>
+      <text x="595" y="152" text-anchor="middle" fill="#ef4444" font-size="10">-1 bearish</text>
+
+      <!-- config.json -->
+      <rect x="268" y="20" width="100" height="50" rx="6" fill="#1a1d27" stroke="#2d3144" stroke-width="1.5"/>
+      <text x="318" y="41"  text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">config.json</text>
+      <text x="318" y="57"  text-anchor="middle" fill="#94a3b8" font-size="10">watchlist tickers</text>
+
+      <!-- Dashboard -->
+      <rect x="678" y="100" width="110" height="60" rx="6" fill="#1a1d27" stroke="#22c55e" stroke-width="1.5"/>
+      <text x="733" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">Dashboard</text>
+      <text x="733" y="138" text-anchor="middle" fill="#22c55e" font-size="10">LONG table</text>
+      <text x="733" y="152" text-anchor="middle" fill="#ef4444" font-size="10">SHORT table</text>
+
+      <!-- arrows -->
+      <!-- user -> ui -->
+      <line x1="100" y1="130" x2="133" y2="130" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- ui -> flask -->
+      <line x1="235" y1="130" x2="266" y2="130" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arr)"/>
+      <!-- flask -> config -->
+      <line x1="318" y1="100" x2="318" y2="72"  stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <!-- flask -> data_fetcher -->
+      <line x1="368" y1="115" x2="398" y2="60"  stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <!-- flask -> pattern_detector -->
+      <line x1="368" y1="130" x2="398" y2="130" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <!-- flask -> indicator_detector -->
+      <line x1="368" y1="148" x2="398" y2="195" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <!-- detectors -> scorer -->
+      <line x1="510" y1="60"  x2="580" y2="108" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <line x1="510" y1="130" x2="543" y2="130" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <line x1="510" y1="207" x2="580" y2="155" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-sm)"/>
+      <!-- scorer -> dashboard -->
+      <line x1="645" y1="130" x2="676" y2="130" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+      <defs>
+        <marker id="arr"    markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#3b82f6"/>
+        </marker>
+        <marker id="arr-sm" markerWidth="6" markerHeight="6" refX="5" refY="2.5" orient="auto">
+          <path d="M0,0 L0,5 L6,2.5 z" fill="#94a3b8"/>
+        </marker>
+        <marker id="arr-g"  markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#22c55e"/>
+        </marker>
+      </defs>
+    </svg>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>Follow one action through the code</h2>
+  <p>Click "Run Fresh Scan" → here's the exact path through the codebase:</p>
+
+  <div class="route">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong><code>ui/index.html</code> — <code>runScan()</code></strong>
+        <p>JS disables the button, shows the spinner, calls <code>fetch('/api/scan', {method:'POST'})</code>. On response, calls <code>renderTable()</code> with the JSON result.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong><code>app.py</code> — <code>post_scan()</code></strong>
+        <p>Flask handler reads <code>config.json</code> for the ticker list, calls the three screener modules in sequence, assembles and returns the JSON response.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong><code>screener/data_fetcher.py</code> — <code>fetch_daily()</code> + <code>fetch_1h()</code></strong>
+        <p>Downloads OHLCV DataFrames from Yahoo Finance via <code>yfinance.download()</code>. Flattens the MultiIndex columns with <code>get_level_values(0)</code>. Returns <code>dict[ticker → DataFrame]</code>.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong><code>screener/pattern_detector.py</code> — <code>detect_patterns()</code></strong>
+        <p>Runs 8 pattern functions on <code>df.iloc[-1]</code> (last complete candle). Each function checks OHLCV ratios. <code>_candle_label()</code> appends the candle date and a <code>⚠ stale</code> flag if the data is old. Returns signal strings.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong><code>screener/indicator_detector.py</code> — <code>detect_indicators()</code></strong>
+        <p>Uses the <code>ta</code> library to compute MACD(12,26,9), BB(20,2σ), and RSI(14). Checks crossover on candles <code>[-2]</code>→<code>[-1]</code> for MACD; single-candle threshold for BB and RSI. Returns signal strings with date labels.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <strong><code>screener/scorer.py</code> — <code>score_tickers()</code></strong>
+        <p>Merges pattern + indicator signals per ticker. <code>_classify()</code> assigns +1/−1 via keyword matching. Sums to a net score, excludes zeros, sorts by magnitude → 1h volume → absolute % change → alphabetical. Returns <code>{"long": [...], "short": [...]}</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>File structure</h2>
+  <div class="file-tree">
+    <span class="hl">AdvancedSearchTool/</span><br>
+    ├── <span class="hl">main.py</span>               <span class="dim"># entry point: Flask thread + pywebview window</span><br>
+    ├── <span class="hl">app.py</span>                <span class="dim"># Flask HTTP API: /, /api/watchlist, /api/scan</span><br>
+    ├── <span class="hl">config.json</span>           <span class="dim"># watchlist tickers (gitignored, persists between runs)</span><br>
+    ├── config.example.json   <span class="dim"># committed default watchlist for new clones</span><br>
+    ├── requirements.txt<br>
+    ├── <span class="hl">screener/</span><br>
+    │   ├── <span class="hl">data_fetcher.py</span>      <span class="dim"># yfinance OHLCV fetch (daily + 1h)</span><br>
+    │   ├── <span class="hl">pattern_detector.py</span>  <span class="dim"># 8 candlestick patterns (manual OHLCV math)</span><br>
+    │   ├── <span class="hl">indicator_detector.py</span> <span class="dim"># MACD · Bollinger Bands · RSI (ta library)</span><br>
+    │   └── <span class="hl">scorer.py</span>            <span class="dim"># confluence scorer + ranked output</span><br>
+    ├── <span class="hl">ui/</span><br>
+    │   └── <span class="hl">index.html</span>           <span class="dim"># single-page dashboard (HTML + CSS + JS inline)</span><br>
+    └── devpost/               <span class="dim"># planning docs (scope, PRD, spec, checklist)</span>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>To change this, start here</h2>
+  <div class="pointer-list">
+
+    <div class="pointer">
+      <div class="label">Add a new candlestick pattern</div>
+      <p><code>screener/pattern_detector.py</code> — add a new <code>_my_pattern(df)</code> function, call it inside <code>detect_patterns()</code>, append the signal string. Name it so the keyword matcher in <code>scorer.py > _BULLISH_KEYWORDS</code> or <code>_BEARISH_KEYWORDS</code> will pick it up automatically.</p>
+    </div>
+
+    <div class="pointer">
+      <div class="label">Add a new indicator signal</div>
+      <p><code>screener/indicator_detector.py</code> — add a helper function and call it from <code>detect_indicators()</code>. Add the keyword to <code>scorer.py > _BULLISH_KEYWORDS</code> or <code>_BEARISH_KEYWORDS</code>.</p>
+    </div>
+
+    <div class="pointer">
+      <div class="label">Change the default watchlist</div>
+      <p>Edit <code>config.json</code> directly, or use the ⚙ Watchlist editor in the running app. The app reads <code>config.json</code> fresh on every scan.</p>
+    </div>
+
+    <div class="pointer">
+      <div class="label">Add a new timeframe (e.g. weekly)</div>
+      <p><code>screener/data_fetcher.py</code> — add <code>fetch_weekly()</code> using <code>interval="1wk"</code>. Then call it in <code>app.py > post_scan()</code> alongside daily and 1h, passing <code>"weekly"</code> as the timeframe label to <code>detect_patterns()</code> and <code>detect_indicators()</code>.</p>
+    </div>
+
+    <div class="pointer">
+      <div class="label">Change the dashboard look</div>
+      <p><code>ui/index.html</code> — all CSS is in the inline <code>&lt;style&gt;</code> block at the top. CSS custom properties (variables) are defined under <code>:root</code> — change <code>--green</code>, <code>--bg</code>, <code>--surface</code> etc. to retheme the whole UI.</p>
+    </div>
+
+    <div class="pointer">
+      <div class="label">Adjust staleness thresholds</div>
+      <p><code>screener/pattern_detector.py > _candle_label()</code> — change the <code>3</code> in <code>(now - last_dt).days > 3</code> for daily, or the <code>26</code> in <code>.total_seconds() > 26 * 3600</code> for intraday.</p>
+    </div>
+
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>Decisions worth knowing</h2>
+
+  <details>
+    <summary>Why pywebview + Flask instead of a browser app?</summary>
+    <div class="details-body">
+      The PRD required no external browser — the app should open as a native desktop window. pywebview wraps a system WebKit view (Safari engine on macOS) and renders the HTML/CSS frontend inside it. Flask runs on a background daemon thread on localhost:5000. The frontend makes standard <code>fetch()</code> calls to it — exactly like a normal web page, except both are on your machine. This means the frontend is debuggable in a real browser during development.
+    </div>
+  </details>
+
+  <details>
+    <summary>Why keyword matching in the scorer instead of signal type enums?</summary>
+    <div class="details-body">
+      Signal strings carry their classification in their name by design — "Bullish Engulfing", "MACD bearish crossover". Keyword matching means adding a new detector signal automatically flows through to scoring as long as the string follows the naming convention. No separate registry or enum to update. The tradeoff: a typo in a signal name produces a score of 0 silently. For a PoC this is acceptable; a production version would use typed signal objects.
+    </div>
+  </details>
+
+  <details>
+    <summary>Why is pandas-ta not used despite being in the original spec?</summary>
+    <div class="details-body">
+      <code>pandas-ta</code> has no published PyPI release compatible with Python 3.10+. Discovered during environment setup. Replaced with <code>ta==0.11.0</code> which covers MACD, Bollinger Bands, and RSI with a clean pandas API. Candlestick patterns use manual OHLCV math throughout — which was already the specced fallback approach.
+    </div>
+  </details>
+
+  <details>
+    <summary>Why does yfinance return a MultiIndex and how do we handle it?</summary>
+    <div class="details-body">
+      <code>yfinance.download()</code> always returns a MultiIndex column structure <code>(field, ticker)</code> — e.g. <code>('Close', 'AAPL')</code> — even when downloading a single ticker. <code>data_fetcher.py > _normalise()</code> flattens it with <code>df.columns.get_level_values(0)</code> so all downstream code receives a simple <code>[Open, High, Low, Close, Volume]</code> DataFrame. This is a consistent yfinance 1.x behaviour worth knowing for any project using the library.
+    </div>
+  </details>
+
+  <!-- ================================================================ -->
+  <h2>A practice to reuse</h2>
+  <div class="practice">
+    <h3>Specify the response shape before writing the handler</h3>
+    <p>In <code>spec.md > POST /api/scan</code>, the JSON response shape was written out explicitly before any code existed:</p>
+    <p><code>{"long": [{"ticker": str, "score": int, "signals": [str]}], "short": [...], "timestamp": str}</code></p>
+    <p>Because that contract existed in the spec, the Flask handler, the scorer's return type, and the JS <code>renderTable()</code> function were all written independently and wired together without a single shape mismatch. The one place the build needed a revision (<code>pandas-ta</code> unavailability) was a dependency that <em>wasn't</em> verified in the spec before writing it.</p>
+    <p><strong>Reuse this on your next project:</strong> before writing any API handler, write the exact JSON response shape in the spec. Run <code>pip index versions &lt;library&gt;</code> before adding any dependency to the stack. These two habits eliminate the most common sources of agent build friction.</p>
+  </div>
+
+  <!-- ================================================================ -->
+  <h2>How to run the app</h2>
+  <div class="run-box">source venv/bin/activate &amp;&amp; python main.py</div>
+  <p style="margin-top:10px; font-size:12px;">Requires Python 3.10+. Install dependencies with <code>pip install -r requirements.txt</code> inside the venv. No browser needed — a native desktop window opens automatically.</p>
+
+</body>
+</html>
