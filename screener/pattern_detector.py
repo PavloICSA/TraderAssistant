@@ -242,6 +242,47 @@ def _evening_star(df: pd.DataFrame) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Candle date label helper
+# ---------------------------------------------------------------------------
+
+def _candle_label(df: pd.DataFrame, timeframe_label: str) -> str:
+    """
+    Build a display label including the candle date and a staleness warning
+    if the last candle is older than expected for its timeframe.
+
+    Examples:
+      "daily, Sep 25"
+      "daily, Sep 24 ⚠ stale"
+      "1h, 14:30"
+    """
+    from datetime import datetime, timezone, timedelta
+
+    last_ts = df.index[-1]
+
+    # Normalise to a timezone-aware datetime
+    if hasattr(last_ts, 'tzinfo') and last_ts.tzinfo is not None:
+        last_dt = last_ts.to_pydatetime()
+    else:
+        last_dt = last_ts.to_pydatetime().replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+
+    if timeframe_label == "daily":
+        date_str = last_dt.strftime("%b %d")
+        # Stale if the last daily candle is more than 3 calendar days old
+        # (accounts for weekends and market holidays)
+        stale = (now - last_dt).days > 3
+        suffix = " ⚠ stale" if stale else ""
+        return f"{timeframe_label}, {date_str}{suffix}"
+    else:
+        # For intraday, show the time; stale if > 26 hours old
+        time_str = last_dt.strftime("%H:%M")
+        stale = (now - last_dt).total_seconds() > 26 * 3600
+        suffix = " ⚠ stale" if stale else ""
+        return f"{timeframe_label}, {time_str}{suffix}"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -254,13 +295,13 @@ def detect_patterns(df: pd.DataFrame, timeframe_label: str) -> list[str]:
         timeframe_label:  e.g. "daily" or "1h" — appended to signal strings
 
     Returns:
-        List of fired signal strings, e.g. ["Hammer (1h)", "Bullish Doji (daily)"]
+        List of fired signal strings, e.g. ["Hammer (1h, Sep 25)", "Bullish Doji (daily, Sep 24 ⚠ stale)"]
     """
     if df is None or len(df) < 3:
         return []
 
     signals: list[str] = []
-    label = timeframe_label
+    label = _candle_label(df, timeframe_label)
 
     # Bullish patterns
     if _hammer(df):

@@ -69,7 +69,7 @@ Build mode: learn
   Learner check: Run a scan. Do the tables look right? Pick a LONG result — do the signals listed (e.g., "Hammer (1h), RSI oversold (daily)") make sense as a reason to go long? Try running a second scan — does the UI refresh cleanly?
   Commit: `Wire full scan pipeline to dashboard UI`
 
-- [ ] **7. Error handling and edge states**
+- [x] **7. Error handling and edge states**
   Becomes usable: The app handles all failure modes gracefully: scan failure shows error banner and retains last results; empty watchlist shows a clear message; first-load empty state is correct; error banner is dismissible.
   Why now: The product isn't shippable until it fails gracefully. Doing this as the last functional slice means the happy path is fully verified first — errors layer on top cleanly.
   PRD ref: `prd.md > Error Handling`, `prd.md > States and Boundaries`

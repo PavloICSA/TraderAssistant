@@ -23,6 +23,7 @@ Public API:
 
 import pandas as pd
 import ta
+from screener.pattern_detector import _candle_label
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +164,7 @@ def detect_indicators(df: pd.DataFrame, timeframe_label: str) -> list[str]:
     if df is None or len(df) < MIN_ROWS:
         return []
 
-    label = timeframe_label
+    label = _candle_label(df, timeframe_label)
     signals: list[str] = []
     signals.extend(_macd_signals(df, label))
     signals.extend(_bb_signals(df, label))
