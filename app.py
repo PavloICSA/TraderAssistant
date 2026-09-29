@@ -22,6 +22,9 @@ app = Flask(__name__, static_folder="ui", static_url_path="")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
+# Maximum number of tickers allowed in the watchlist
+MAX_WATCHLIST = 200
+
 
 # ---------------------------------------------------------------------------
 # Helper: config I/O
@@ -51,10 +54,13 @@ def index():
 
 @app.route("/api/watchlist", methods=["GET"])
 def get_watchlist():
-    """Return the current watchlist tickers."""
+    """Return the current watchlist tickers and the maximum allowed count."""
     try:
         config = _read_config()
-        return jsonify({"tickers": config.get("tickers", [])})
+        return jsonify({
+            "tickers": config.get("tickers", []),
+            "max": MAX_WATCHLIST,
+        })
     except Exception as e:
         return jsonify({"error": f"Failed to read watchlist: {str(e)}"}), 500
 
@@ -72,6 +78,8 @@ def put_watchlist():
         tickers = [str(t).strip().upper() for t in tickers if str(t).strip()]
         if not tickers:
             return jsonify({"error": "Watchlist must contain at least one ticker"}), 400
+        if len(tickers) > MAX_WATCHLIST:
+            return jsonify({"error": f"Watchlist exceeds the maximum of {MAX_WATCHLIST} tickers. Please remove some before saving."}), 400
 
         _write_config({"tickers": tickers})
         return jsonify({"tickers": tickers})

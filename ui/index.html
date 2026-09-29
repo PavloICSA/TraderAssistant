@@ -365,6 +365,12 @@
       flex-wrap: wrap;
       gap: 6px;
       min-height: 36px;
+      max-height: 180px;
+      overflow-y: auto;
+      padding: 4px 2px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface-alt);
     }
 
     .ticker-chip {
@@ -575,6 +581,17 @@
     <h3 id="modal-title">Edit Watchlist</h3>
     <p class="modal-hint">Add or remove ticker symbols. Changes take effect on the next scan.</p>
 
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+      <input id="chip-search" type="text" placeholder="Filter tickers…"
+             autocomplete="off" spellcheck="false"
+             oninput="_renderTickerChips()"
+             style="flex:1; background:var(--surface-alt); border:1px solid var(--border);
+                    border-radius:5px; padding:5px 10px; color:var(--text);
+                    font-family:var(--sans); font-size:12px; outline:none;" />
+      <span id="modal-ticker-count" style="font-size:11px; color:var(--text-faint);
+            font-family:var(--mono); white-space:nowrap;"></span>
+    </div>
+
     <div id="ticker-list" aria-label="Current tickers"></div>
 
     <div class="add-ticker-row">
@@ -602,6 +619,7 @@
   // ------------------------------------------------------------------ //
   let _currentTickers = [];   // live copy while modal is open
   let _lastResults = null;    // retained on scan failure
+  let _maxWatchlist = 200;    // server-side limit, updated on watchlist load
 
   // ------------------------------------------------------------------ //
   // Init                                                                //
@@ -615,6 +633,7 @@
     try {
       const res = await fetch('/api/watchlist');
       const data = await res.json();
+      _maxWatchlist = data.max || 200;
       _updateStatusWatchlist(data.tickers || []);
     } catch (e) {
       document.getElementById('status-watchlist').textContent = 'Watchlist unavailable';
@@ -623,19 +642,27 @@
 
   function _updateStatusWatchlist(tickers) {
     const el = document.getElementById('status-watchlist');
-    el.textContent = tickers.length
-      ? 'Watchlist: ' + tickers.join(', ')
-      : 'Watchlist: (empty)';
+    const INLINE_LIMIT = 8;  // show individual names up to this count
+    if (!tickers.length) {
+      el.textContent = 'Watchlist: (empty)';
+    } else if (tickers.length <= INLINE_LIMIT) {
+      el.textContent = 'Watchlist: ' + tickers.join(', ');
+    } else {
+      el.textContent = `Watchlist: ${tickers.length} tickers`;
+    }
   }
 
   function openSettings() {
     fetch('/api/watchlist')
       .then(r => r.json())
       .then(data => {
+        _maxWatchlist = data.max || 200;
         _currentTickers = [...(data.tickers || [])];
         _renderTickerChips();
+        _updateModalCount();
         document.getElementById('modal-error').classList.remove('visible');
         document.getElementById('input-ticker').value = '';
+        document.getElementById('chip-search').value = '';
         document.getElementById('modal-overlay').classList.add('visible');
         document.getElementById('input-ticker').focus();
       })
@@ -648,18 +675,36 @@
 
   function _renderTickerChips() {
     const container = document.getElementById('ticker-list');
+    const query = (document.getElementById('chip-search')?.value || '').trim().toUpperCase();
+    const visible = query
+      ? _currentTickers.filter(t => t.includes(query))
+      : _currentTickers;
+
     container.innerHTML = '';
     if (_currentTickers.length === 0) {
       container.innerHTML = '<span style="color:var(--text-faint);font-size:12px;font-style:italic;">No tickers — add one above.</span>';
       return;
     }
-    _currentTickers.forEach((ticker, idx) => {
+    if (visible.length === 0) {
+      container.innerHTML = '<span style="color:var(--text-faint);font-size:12px;font-style:italic;">No tickers match your search.</span>';
+      return;
+    }
+    visible.forEach(ticker => {
+      const idx = _currentTickers.indexOf(ticker);
       const chip = document.createElement('span');
       chip.className = 'ticker-chip';
       chip.innerHTML = `${ticker}
         <button onclick="removeTicker(${idx})" aria-label="Remove ${ticker}">×</button>`;
       container.appendChild(chip);
     });
+  }
+
+  function _updateModalCount() {
+    const el = document.getElementById('modal-ticker-count');
+    if (!el) return;
+    const n = _currentTickers.length;
+    el.textContent = `${n} / ${_maxWatchlist}`;
+    el.style.color = n >= _maxWatchlist ? 'var(--red)' : 'var(--text-faint)';
   }
 
   function addTicker() {
@@ -679,8 +724,14 @@
       errEl.classList.add('visible');
       return;
     }
+    if (_currentTickers.length >= _maxWatchlist) {
+      errEl.textContent = `Watchlist is at the maximum of ${_maxWatchlist} tickers. Remove some before adding more.`;
+      errEl.classList.add('visible');
+      return;
+    }
     _currentTickers.push(val);
     _renderTickerChips();
+    _updateModalCount();
     input.value = '';
     input.focus();
   }
@@ -688,6 +739,7 @@
   function removeTicker(idx) {
     _currentTickers.splice(idx, 1);
     _renderTickerChips();
+    _updateModalCount();
   }
 
   async function saveWatchlist() {

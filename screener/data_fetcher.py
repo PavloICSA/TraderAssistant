@@ -7,10 +7,17 @@ Provides:
 
 Each DataFrame has columns: Open, High, Low, Close, Volume (float64).
 Raises DataFetchError when a network failure or empty response occurs.
+
+Fetches are parallelised with ThreadPoolExecutor (MAX_WORKERS threads) to
+keep scan time reasonable for large watchlists.
 """
 
 import yfinance as yf
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# Maximum parallel yfinance requests — keeps us well clear of rate limits
+MAX_WORKERS = 10
 
 
 class DataFetchError(Exception):
@@ -53,44 +60,54 @@ def _normalise(df: pd.DataFrame, ticker: str, timeframe: str) -> pd.DataFrame:
     return df
 
 
+def _fetch_one(ticker: str, period: str, interval: str) -> tuple[str, pd.DataFrame | None, str | None]:
+    """Fetch OHLCV for a single ticker. Returns (ticker, df, error_msg)."""
+    try:
+        raw = yf.download(
+            ticker,
+            period=period,
+            interval=interval,
+            auto_adjust=True,
+            progress=False,
+        )
+        return ticker, _normalise(raw, ticker, interval), None
+    except DataFetchError as e:
+        return ticker, None, str(e)
+    except Exception as e:
+        return ticker, None, f"{ticker} ({interval}): unexpected error — {e}"
+
+
 def fetch_daily(tickers: list[str]) -> dict[str, pd.DataFrame]:
     """
-    Fetch 90 days of daily OHLCV data for each ticker.
+    Fetch 90 days of daily OHLCV data for each ticker, concurrently.
 
     Returns a dict mapping ticker symbol -> DataFrame.
     Skips tickers that fail individually; raises DataFetchError only when
     ALL tickers fail.
     """
     results: dict[str, pd.DataFrame] = {}
-    errors: list[str] = []
+    errors:  list[str] = []
 
-    for ticker in tickers:
-        try:
-            raw = yf.download(
-                ticker,
-                period="90d",
-                interval="1d",
-                auto_adjust=True,
-                progress=False,
-            )
-            results[ticker] = _normalise(raw, ticker, "daily")
-        except DataFetchError as e:
-            errors.append(str(e))
-        except Exception as e:
-            errors.append(f"{ticker} (daily): unexpected error — {e}")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(_fetch_one, t, "90d", "1d"): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, df, err = future.result()
+            if df is not None:
+                results[ticker] = df
+            else:
+                errors.append(err)
 
     if not results:
         raise DataFetchError(
             "Failed to fetch daily data for all tickers. Errors:\n" +
             "\n".join(errors)
         )
-
     return results
 
 
 def fetch_1h(tickers: list[str]) -> dict[str, pd.DataFrame]:
     """
-    Fetch 30 days of 1-hour OHLCV data for each ticker.
+    Fetch 30 days of 1-hour OHLCV data for each ticker, concurrently.
     yfinance supports 1h up to ~730 days but freshness degrades; 30d is reliable.
 
     Returns a dict mapping ticker symbol -> DataFrame.
@@ -98,22 +115,16 @@ def fetch_1h(tickers: list[str]) -> dict[str, pd.DataFrame]:
     ALL tickers fail.
     """
     results: dict[str, pd.DataFrame] = {}
-    errors: list[str] = []
+    errors:  list[str] = []
 
-    for ticker in tickers:
-        try:
-            raw = yf.download(
-                ticker,
-                period="30d",
-                interval="1h",
-                auto_adjust=True,
-                progress=False,
-            )
-            results[ticker] = _normalise(raw, ticker, "1h")
-        except DataFetchError as e:
-            errors.append(str(e))
-        except Exception as e:
-            errors.append(f"{ticker} (1h): unexpected error — {e}")
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(_fetch_one, t, "30d", "1h"): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, df, err = future.result()
+            if df is not None:
+                results[ticker] = df
+            else:
+                errors.append(err)
 
     if not results:
         raise DataFetchError(
@@ -125,7 +136,7 @@ def fetch_1h(tickers: list[str]) -> dict[str, pd.DataFrame]:
 
 
 # ---------------------------------------------------------------------------
-# Manual test entry point
+# Manual test entry point (benchmarks concurrent fetching)
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
