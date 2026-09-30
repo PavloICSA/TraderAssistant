@@ -130,6 +130,19 @@
     }
     #btn-settings:hover { border-color: var(--accent); color: var(--accent); }
 
+    #btn-help {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 5px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    #btn-help:hover { border-color: var(--accent); color: var(--accent); }
+
     /* ------------------------------------------------------------------ */
     /* Error banner                                                         */
     /* ------------------------------------------------------------------ */
@@ -561,6 +574,134 @@
       display: none;
     }
     #modal-error.visible { display: block; }
+
+    /* ------------------------------------------------------------------ */
+    /* Help modal                                                           */
+    /* ------------------------------------------------------------------ */
+    #help-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #help-overlay.visible { display: flex; }
+
+    #help-modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 640px;
+      max-width: 95vw;
+      max-height: 82vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #help-modal-header {
+      display: flex;
+      align-items: center;
+      padding: 18px 24px 0;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .help-tab {
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-faint);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s;
+    }
+    .help-tab:hover { color: var(--text-muted); }
+    .help-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    #btn-close-help {
+      margin-left: auto;
+      background: transparent;
+      border: none;
+      color: var(--text-faint);
+      font-size: 20px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+    #btn-close-help:hover { color: var(--red); }
+
+    #help-body {
+      overflow-y: auto;
+      flex: 1;
+      padding: 24px;
+      font-size: 13px;
+      color: var(--muted, #94a3b8);
+      line-height: 1.75;
+    }
+
+    .help-section { display: none; }
+    .help-section.active { display: block; }
+
+    #help-body h3 {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 20px 0 6px;
+      letter-spacing: 0.03em;
+    }
+    #help-body h3:first-child { margin-top: 0; }
+
+    #help-body p { margin-bottom: 10px; color: var(--text-muted); }
+
+    #help-body ul {
+      margin: 0 0 12px 18px;
+      color: var(--text-muted);
+    }
+    #help-body ul li { margin-bottom: 5px; }
+
+    #help-body .pill {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+    .pill-long  { background: var(--green-dim);  color: var(--green); }
+    .pill-short { background: var(--red-dim);    color: var(--red);   }
+    .pill-neutral { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+
+    #help-body .score-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 16px;
+      font-size: 12px;
+    }
+    #help-body .score-table th {
+      text-align: left;
+      padding: 6px 10px;
+      background: var(--surface-alt);
+      color: var(--text-faint);
+      font-size: 11px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    #help-body .score-table td {
+      padding: 7px 10px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    #help-body .score-table tr:last-child td { border-bottom: none; }
+    .val-bull { color: var(--green); font-weight: 700; font-family: var(--mono); }
+    .val-bear { color: var(--red);   font-weight: 700; font-family: var(--mono); }
   </style>
 </head>
 <body>
@@ -582,6 +723,7 @@
       <span>·</span>
       <span id="status-watchlist">Loading watchlist…</span>
       <button id="btn-settings" onclick="openSettings()">⚙ Watchlist</button>
+      <button id="btn-help" onclick="openHelp('guidelines')">? Help</button>
     </div>
   </header>
 
@@ -725,6 +867,109 @@
 </div>
 
 <!-- ================================================================== -->
+<!-- Help modal                                                          -->
+<!-- ================================================================== -->
+<div id="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-modal-title">
+  <div id="help-modal">
+
+    <div id="help-modal-header">
+      <button class="help-tab active" id="tab-guidelines" onclick="openHelp('guidelines')">Guidelines</button>
+      <button class="help-tab"        id="tab-about"      onclick="openHelp('about')">About</button>
+      <button id="btn-close-help" onclick="closeHelp()" aria-label="Close help">×</button>
+    </div>
+
+    <div id="help-body">
+
+      <!-- Guidelines tab -->
+      <div class="help-section active" id="section-guidelines">
+        <h3>What this tool does</h3>
+        <p>The Multi-Timeframe Stock Screener automatically scans your watchlist for trading setups by combining candlestick pattern recognition with technical indicator signals across two timeframes — <strong>Daily</strong> (trend direction) and <strong>1-hour</strong> (entry trigger). Results are scored by confluence and ranked into two actionable lists.</p>
+
+        <h3>How to use it</h3>
+        <ul>
+          <li><strong>Run Fresh Scan</strong> — click the button in the header to fetch live data and analyse all tickers in your watchlist. A scan typically takes 3–10 seconds.</li>
+          <li><strong>Read the results</strong> — the <span class="pill pill-long">LONG</span> table lists bullish setups ranked by score. The <span class="pill pill-short">SHORT</span> table lists bearish setups. Higher absolute score = stronger confluence.</li>
+          <li><strong>Inspect a signal</strong> — click any result row to open the candlestick chart for that ticker. Toggle Daily / 1h to verify the pattern visually.</li>
+          <li><strong>Manage your watchlist</strong> — click <strong>⚙ Watchlist</strong> to add or remove tickers. Up to 200 tickers supported.</li>
+        </ul>
+
+        <h3>Understanding the score</h3>
+        <p>Each confirmed signal contributes one point. Bullish signals add <span class="val-bull">+1</span>; bearish signals add <span class="val-bear">−1</span>. Both Daily and 1h are evaluated independently — maximum ±8 per ticker.</p>
+
+        <table class="score-table">
+          <thead><tr><th>Signal type</th><th>Bullish</th><th>Bearish</th></tr></thead>
+          <tbody>
+            <tr><td>Candlestick pattern</td><td class="val-bull">+1</td><td class="val-bear">−1</td></tr>
+            <tr><td>MACD crossover (12, 26, 9)</td><td class="val-bull">+1</td><td class="val-bear">−1</td></tr>
+            <tr><td>Bollinger Band touch (20, 2σ)</td><td class="val-bull">+1 lower</td><td class="val-bear">−1 upper</td></tr>
+            <tr><td>RSI (14-period)</td><td class="val-bull">+1 (RSI &lt; 30)</td><td class="val-bear">−1 (RSI &gt; 70)</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Signal date labels</h3>
+        <p>Each signal shows the candle date — e.g. <span class="pill pill-neutral">Hammer (daily, Sep 25)</span>. A <span class="pill pill-neutral">⚠ stale</span> flag means the candle is older than expected. Always confirm you are acting on a current signal.</p>
+
+        <h3>Chart panel tips</h3>
+        <ul>
+          <li>Click any result row to open its candlestick chart on the timeframe of the first detected signal.</li>
+          <li>Toggle <strong>Daily</strong> and <strong>1h</strong> — daily shows the trend, 1h shows the entry timing.</li>
+          <li>High-volume candles on a signal increase confidence. Volume is shown as a histogram below the candles.</li>
+          <li>Close the chart with <strong>✕ Close</strong>, clicking the backdrop, or pressing <strong>Escape</strong>.</li>
+        </ul>
+
+        <h3>Tie-breaking sort order</h3>
+        <p>Equal scores are broken by: <strong>1h volume</strong> (higher first) → <strong>absolute 1h % change</strong> → <strong>alphabetical</strong> by ticker.</p>
+
+        <h3>Important limitations</h3>
+        <ul>
+          <li>This tool is for <strong>personal research only</strong> — not financial advice.</li>
+          <li>Data is fetched on demand from Yahoo Finance and reflects the most recent complete candle, not real-time tick prices.</li>
+          <li>Always verify visually using the chart panel before acting on any signal.</li>
+          <li>An internet connection is required for data fetching and chart rendering.</li>
+        </ul>
+      </div>
+
+      <!-- About tab -->
+      <div class="help-section" id="section-about">
+        <h3>What is this tool?</h3>
+        <p>The <strong>Multi-Timeframe Stock Screener</strong> is a Python desktop application that automates scanning a watchlist for high-probability trading setups. Instead of reviewing charts one by one, run a single scan and see the strongest confluent signals ranked and ready to verify.</p>
+
+        <h3>How it works</h3>
+        <ul>
+          <li><strong>Data fetch</strong> — live OHLCV data is downloaded from Yahoo Finance concurrently for all watchlist tickers: 90 days of daily candles and 30 days of 1-hour candles.</li>
+          <li><strong>Pattern detection</strong> — eight candlestick patterns are evaluated on the most recent complete candle using price-action math: Hammer, Shooting Star, Bullish/Bearish Engulfing, Morning Star, Evening Star, and context-aware Bullish/Bearish Doji.</li>
+          <li><strong>Indicator detection</strong> — MACD (12, 26, 9) for momentum crossovers, Bollinger Bands (20-period, 2σ) for volatility extremes, and RSI (14-period) for overbought/oversold conditions.</li>
+          <li><strong>Confluence scoring</strong> — each fired signal contributes ±1 to a net score. Tickers are split into LONG and SHORT lists, sorted by signal strength.</li>
+        </ul>
+
+        <h3>Technology</h3>
+        <ul>
+          <li><strong>Runtime:</strong> Python 3.10+ desktop application</li>
+          <li><strong>Window:</strong> pywebview (native OS window, no browser required)</li>
+          <li><strong>Backend:</strong> Flask on localhost:5000</li>
+          <li><strong>Data:</strong> yfinance (Yahoo Finance OHLCV)</li>
+          <li><strong>Indicators:</strong> ta library (MACD, Bollinger Bands, RSI)</li>
+          <li><strong>Charts:</strong> lightweight-charts by TradingView (CDN)</li>
+          <li><strong>Frontend:</strong> Vanilla HTML, CSS, JavaScript — no framework, no build step</li>
+        </ul>
+
+        <h3>Design principles</h3>
+        <ul>
+          <li><strong>Transparency</strong> — every signal shows what triggered it, which timeframe, and the candle date. Nothing is a black box.</li>
+          <li><strong>Speed</strong> — tickers are fetched concurrently (up to 10 parallel requests).</li>
+          <li><strong>Simplicity</strong> — the scoring model is additive and equal-weighted. Confluence builds confidence naturally.</li>
+          <li><strong>Verification-first</strong> — the chart panel is a first-class feature so you can validate every signal before acting on it.</li>
+        </ul>
+
+        <h3>Disclaimer</h3>
+        <p>This is a personal research tool and proof of concept. It does not provide financial advice, execute trades, or guarantee any investment outcome. All signals are mechanical detections based on historical price data. Use at your own discretion.</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================== -->
 <!-- JavaScript                                                          -->
 <!-- ================================================================== -->
 <script>
@@ -786,6 +1031,29 @@
   function closeSettings() {
     document.getElementById('modal-overlay').classList.remove('visible');
   }
+
+  // ------------------------------------------------------------------ //
+  // Help modal                                                          //
+  // ------------------------------------------------------------------ //
+  function openHelp(tab) {
+    // Switch active tab
+    document.querySelectorAll('.help-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.help-section').forEach(s => s.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('section-' + tab).classList.add('active');
+    document.getElementById('help-overlay').classList.add('visible');
+  }
+
+  function closeHelp() {
+    document.getElementById('help-overlay').classList.remove('visible');
+  }
+
+  // Escape closes help modal too
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (document.getElementById('help-overlay').classList.contains('visible')) closeHelp();
+    }
+  });
 
   function _renderTickerChips() {
     const container = document.getElementById('ticker-list');
