@@ -323,6 +323,96 @@
     footer strong { color: var(--text-muted); }
 
     /* ------------------------------------------------------------------ */
+    /* Chart panel (slide-in from right)                                  */
+    /* ------------------------------------------------------------------ */
+    #chart-panel {
+      position: fixed;
+      top: 0; right: 0;
+      width: min(680px, 100vw);
+      height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      z-index: 200;
+      transform: translateX(100%);
+      transition: transform 0.25s ease;
+      box-shadow: -8px 0 32px rgba(0,0,0,0.5);
+    }
+    #chart-panel.open { transform: translateX(0); }
+
+    #chart-panel-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #chart-panel-title {
+      font-size: 15px; font-weight: 700;
+      color: var(--text); font-family: var(--mono);
+    }
+    #chart-panel-meta { font-size: 12px; color: var(--text-faint); }
+
+    #chart-panel-signals {
+      display: flex; flex-wrap: wrap; gap: 4px;
+      padding: 10px 20px;
+      flex-shrink: 0;
+      border-bottom: 1px solid var(--border);
+      min-height: 36px;
+    }
+
+    #btn-close-chart {
+      margin-left: auto;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      border-radius: 5px;
+      padding: 5px 12px; font-size: 12px;
+      cursor: pointer; transition: border-color 0.15s;
+      white-space: nowrap;
+    }
+    #btn-close-chart:hover { border-color: var(--red); color: var(--red); }
+
+    .tf-toggle { display: flex; gap: 6px; }
+    .tf-btn {
+      padding: 4px 10px; font-size: 11px; font-weight: 700;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: transparent; color: var(--text-muted);
+      cursor: pointer; transition: background 0.12s, color 0.12s;
+    }
+    .tf-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    #chart-loading {
+      display: none; align-items: center; justify-content: center;
+      flex: 1; color: var(--text-faint); font-size: 13px; gap: 10px;
+    }
+    #chart-loading .spinner { display: inline-block; }
+
+    #chart-error {
+      display: none; align-items: center; justify-content: center;
+      flex: 1; color: #fca5a5; font-size: 13px;
+      text-align: center; padding: 24px;
+    }
+
+    #chart-container { flex: 1; min-height: 0; position: relative; }
+
+    #chart-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35); z-index: 199;
+    }
+    #chart-backdrop.visible { display: block; }
+
+    tbody tr.clickable-row { cursor: pointer; }
+    tbody tr.clickable-row:hover td { background: var(--surface-alt); }
+    tbody tr.clickable-row.active-row td {
+      background: #1e2235;
+      border-left: 2px solid var(--accent);
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Modal overlay                                                        */
     /* ------------------------------------------------------------------ */
     #modal-overlay {
@@ -574,6 +664,30 @@
 </div><!-- /.app -->
 
 <!-- ================================================================== -->
+<!-- Chart backdrop                                                     -->
+<!-- ================================================================== -->
+<div id="chart-backdrop" onclick="closeChart()"></div>
+
+<!-- ================================================================== -->
+<!-- Chart panel                                                        -->
+<!-- ================================================================== -->
+<div id="chart-panel" role="complementary" aria-label="Candlestick chart">
+  <div id="chart-panel-header">
+    <span id="chart-panel-title">—</span>
+    <span id="chart-panel-meta"></span>
+    <div class="tf-toggle">
+      <button class="tf-btn" id="tf-daily" onclick="switchChartTf('daily')">Daily</button>
+      <button class="tf-btn" id="tf-1h"    onclick="switchChartTf('1h')">1h</button>
+    </div>
+    <button id="btn-close-chart" onclick="closeChart()">✕ Close</button>
+  </div>
+  <div id="chart-panel-signals"></div>
+  <div id="chart-loading"><span class="spinner"></span> Loading chart…</div>
+  <div id="chart-error"></div>
+  <div id="chart-container"></div>
+</div>
+
+<!-- ================================================================== -->
 <!-- Watchlist modal                                                     -->
 <!-- ================================================================== -->
 <div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -808,7 +922,7 @@
   // Table rendering                                                     //
   // ------------------------------------------------------------------ //
   function renderTable(tbodyId, countId, rows, side) {
-    const tbody = document.getElementById(tbodyId);
+    const tbody  = document.getElementById(tbodyId);
     const countEl = document.getElementById(countId);
     tbody.innerHTML = '';
 
@@ -822,13 +936,11 @@
 
     rows.forEach(row => {
       const tr = document.createElement('tr');
+      tr.className = 'clickable-row';
 
-      const scoreClass = side === 'long' ? 'score-long' : 'score-short';
-      const scoreDisplay = side === 'long'
-        ? '+' + row.score
-        : row.score;  // already negative
-
-      const signalTags = (row.signals || [])
+      const scoreClass   = side === 'long' ? 'score-long' : 'score-short';
+      const scoreDisplay = side === 'long' ? '+' + row.score : row.score;
+      const signalTags   = (row.signals || [])
         .map(s => `<span class="signal-tag">${_escHtml(s)}</span>`)
         .join(' ');
 
@@ -837,6 +949,20 @@
         <td class="td-score ${scoreClass}">${scoreDisplay}</td>
         <td class="td-signals">${signalTags || '<span style="color:var(--text-faint)">—</span>'}</td>
       `;
+
+      // Click → open chart panel
+      tr.addEventListener('click', () => {
+        // Highlight this row, clear previous
+        if (_activeRow) _activeRow.classList.remove('active-row');
+        _activeRow = tr;
+        tr.classList.add('active-row');
+
+        // Prefer the timeframe of the first signal, fallback to daily
+        const firstSig = (row.signals || [])[0] || '';
+        const preferTf = firstSig.includes('(1h') ? '1h' : 'daily';
+        openChart(row.ticker, row.signals, side, preferTf);
+      });
+
       tbody.appendChild(tr);
     });
   }
@@ -852,6 +978,182 @@
   function hideError() {
     document.getElementById('error-banner').classList.remove('visible');
   }
+
+  // ------------------------------------------------------------------ //
+  // Chart panel                                                        //
+  // ------------------------------------------------------------------ //
+
+  // lightweight-charts instance — destroyed and recreated on each open
+  let _lwChart   = null;
+  let _chartTicker   = null;
+  let _chartSignals  = [];
+  let _chartSide     = null;   // 'long' | 'short'
+  let _chartActiveTf = 'daily';
+  let _activeRow     = null;   // currently highlighted <tr>
+
+  // Load lightweight-charts from CDN on first chart open (lazy)
+  function _ensureLwCharts() {
+    return new Promise((resolve, reject) => {
+      if (window.LightweightCharts) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js';
+      s.onload  = resolve;
+      s.onerror = () => reject(new Error('Failed to load chart library. Check your internet connection.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function openChart(ticker, signals, side, preferredTf) {
+    _chartTicker  = ticker;
+    _chartSignals = signals || [];
+    _chartSide    = side;
+    _chartActiveTf = preferredTf || 'daily';
+
+    // Update header
+    document.getElementById('chart-panel-title').textContent = ticker;
+
+    // Render signal tags in the signals strip
+    const sigEl = document.getElementById('chart-panel-signals');
+    const scoreClass = side === 'long' ? 'score-long' : 'score-short';
+    sigEl.innerHTML = _chartSignals.length
+      ? _chartSignals.map(s => `<span class="signal-tag">${_escHtml(s)}</span>`).join(' ')
+      : '<span style="color:var(--text-faint);font-size:12px;font-style:italic;">No signals</span>';
+
+    // Activate the right TF button
+    document.getElementById('tf-daily').classList.toggle('active', _chartActiveTf === 'daily');
+    document.getElementById('tf-1h').classList.toggle('active',    _chartActiveTf === '1h');
+
+    // Show panel + backdrop
+    document.getElementById('chart-panel').classList.add('open');
+    document.getElementById('chart-backdrop').classList.add('visible');
+
+    _loadChartData();
+  }
+
+  function closeChart() {
+    document.getElementById('chart-panel').classList.remove('open');
+    document.getElementById('chart-backdrop').classList.remove('visible');
+    // Clear active row highlight
+    if (_activeRow) {
+      _activeRow.classList.remove('active-row');
+      _activeRow = null;
+    }
+    // Destroy chart instance to free memory
+    if (_lwChart) { _lwChart.remove(); _lwChart = null; }
+  }
+
+  function switchChartTf(tf) {
+    if (tf === _chartActiveTf) return;
+    _chartActiveTf = tf;
+    document.getElementById('tf-daily').classList.toggle('active', tf === 'daily');
+    document.getElementById('tf-1h').classList.toggle('active',    tf === '1h');
+    _loadChartData();
+  }
+
+  async function _loadChartData() {
+    const loadEl  = document.getElementById('chart-loading');
+    const errEl   = document.getElementById('chart-error');
+    const contEl  = document.getElementById('chart-container');
+
+    // Show loading state
+    loadEl.style.display  = 'flex';
+    errEl.style.display   = 'none';
+    contEl.style.display  = 'none';
+
+    // Destroy previous chart
+    if (_lwChart) { _lwChart.remove(); _lwChart = null; }
+
+    try {
+      await _ensureLwCharts();
+
+      const res  = await fetch(`/api/chart/${encodeURIComponent(_chartTicker)}/${_chartActiveTf}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Chart data unavailable');
+
+      loadEl.style.display = 'none';
+      contEl.style.display = 'block';
+      document.getElementById('chart-panel-meta').textContent =
+        `${_chartActiveTf === 'daily' ? 'Daily · last 90 days' : '1h · last 30 days'}`;
+
+      // Render with lightweight-charts
+      _renderLwChart(contEl, data.candles);
+
+    } catch (e) {
+      loadEl.style.display = 'none';
+      errEl.style.display  = 'flex';
+      errEl.textContent    = '⚠️ ' + e.message;
+    }
+  }
+
+  function _renderLwChart(container, candles) {
+    // Clear container
+    container.innerHTML = '';
+
+    const upColor   = '#22c55e';
+    const downColor = '#ef4444';
+    const wickUp    = '#16a34a';
+    const wickDown  = '#dc2626';
+
+    _lwChart = LightweightCharts.createChart(container, {
+      width:  container.clientWidth,
+      height: container.clientHeight,
+      layout: {
+        background: { color: '#0f1117' },
+        textColor:  '#94a3b8',
+      },
+      grid: {
+        vertLines:  { color: '#1e2235' },
+        horzLines:  { color: '#1e2235' },
+      },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: '#2d3144' },
+      timeScale: {
+        borderColor:     '#2d3144',
+        timeVisible:     _chartActiveTf === '1h',
+        secondsVisible:  false,
+      },
+    });
+
+    const candleSeries = _lwChart.addCandlestickSeries({
+      upColor,
+      downColor,
+      borderUpColor:   upColor,
+      borderDownColor: downColor,
+      wickUpColor:     wickUp,
+      wickDownColor:   wickDown,
+    });
+
+    candleSeries.setData(candles);
+
+    // Volume histogram (secondary)
+    const volSeries = _lwChart.addHistogramSeries({
+      color:       '#3b82f644',
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    });
+    _lwChart.priceScale('vol').applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
+    });
+    volSeries.setData(candles.map(c => ({ time: c.time, value: c.volume, color: c.close >= c.open ? '#22c55e33' : '#ef444433' })));
+
+    _lwChart.timeScale().fitContent();
+
+    // Resize when panel width changes
+    const ro = new ResizeObserver(() => {
+      if (_lwChart) _lwChart.applyOptions({
+        width:  container.clientWidth,
+        height: container.clientHeight,
+      });
+    });
+    ro.observe(container);
+  }
+
+  // Keyboard: Escape closes the chart panel
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('chart-panel').classList.contains('open')) {
+      closeChart();
+    }
+  });
 
   // ------------------------------------------------------------------ //
   // Utilities                                                           //

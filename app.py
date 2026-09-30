@@ -87,6 +87,57 @@ def put_watchlist():
         return jsonify({"error": f"Failed to update watchlist: {str(e)}"}), 500
 
 
+@app.route("/api/chart/<ticker>/<timeframe>", methods=["GET"])
+def get_chart(ticker, timeframe):
+    """
+    Return OHLCV data for a ticker and timeframe as JSON for candlestick rendering.
+
+    Timeframe: "daily" or "1h"
+    Response: { "ticker": str, "timeframe": str, "candles": [{time, open, high, low, close, volume}] }
+    """
+    try:
+        ticker = ticker.upper()
+        if timeframe not in ("daily", "1h"):
+            return jsonify({"error": "Invalid timeframe. Use 'daily' or '1h'."}), 400
+
+        if timeframe == "daily":
+            data = fetch_daily([ticker])
+        else:
+            data = fetch_1h([ticker])
+
+        if ticker not in data:
+            return jsonify({"error": f"No data available for {ticker}."}), 404
+
+        df = data[ticker]
+
+        candles = []
+        for ts, row in df.iterrows():
+            # lightweight-charts expects UNIX timestamp (seconds) for time
+            if hasattr(ts, 'timestamp'):
+                t = int(ts.timestamp())
+            else:
+                t = int(ts.value // 1_000_000_000)
+            candles.append({
+                "time":   t,
+                "open":   round(float(row["Open"]),  4),
+                "high":   round(float(row["High"]),  4),
+                "low":    round(float(row["Low"]),   4),
+                "close":  round(float(row["Close"]), 4),
+                "volume": int(row["Volume"]),
+            })
+
+        return jsonify({
+            "ticker":    ticker,
+            "timeframe": timeframe,
+            "candles":   candles,
+        })
+
+    except DataFetchError as e:
+        return jsonify({"error": f"Unable to fetch chart data: {e}"}), 500
+    except Exception as e:
+        return jsonify({"error": f"Chart error: {e}"}), 500
+
+
 @app.route("/api/scan", methods=["POST"])
 def post_scan():
     """
