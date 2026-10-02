@@ -196,7 +196,7 @@ def post_scan():
             )
 
         # --- Score and rank ---
-        ranked = score_tickers(pattern_sigs, indicator_sigs, hourly_data)
+        ranked = score_tickers(pattern_sigs, indicator_sigs, hourly_data, daily_data)
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
