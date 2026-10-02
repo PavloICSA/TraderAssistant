@@ -161,16 +161,31 @@ def post_scan():
 
         # --- Fetch data ---
         try:
-            daily_data  = fetch_daily(tickers)
-            hourly_data = fetch_1h(tickers)
+            daily_data,  daily_failed  = fetch_daily(tickers)
+            hourly_data, hourly_failed = fetch_1h(tickers)
         except DataFetchError as e:
             return jsonify({"error": f"Unable to fetch data from Yahoo Finance. {e}"}), 500
+
+        # Collect tickers that failed on either timeframe, deduplicated
+        fetch_warnings: dict[str, str] = {}
+        for ticker, reason in {**daily_failed, **hourly_failed}.items():
+            # Produce a concise, user-friendly reason
+            if "invalid" in reason.lower() or "no data" in reason.lower():
+                msg = "No data found — ticker may be invalid or delisted."
+            elif "unavailable" in reason.lower() or "yahoo" in reason.lower():
+                msg = "Yahoo Finance returned no data. Check your connection or try again."
+            else:
+                msg = "Data unavailable — skipped."
+            fetch_warnings[ticker] = msg
+
+        # Only analyse tickers that succeeded on both timeframes
+        analysable = [t for t in tickers if t in daily_data and t in hourly_data]
 
         # --- Detect patterns and indicators on both timeframes ---
         pattern_sigs   = {}
         indicator_sigs = {}
 
-        for ticker in tickers:
+        for ticker in analysable:
             pattern_sigs[ticker] = (
                 detect_patterns(daily_data.get(ticker),  "daily") +
                 detect_patterns(hourly_data.get(ticker), "1h")
@@ -185,10 +200,17 @@ def post_scan():
 
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+        # Build warnings list for the UI: [{ticker, reason}]
+        warnings = [
+            {"ticker": t, "reason": r}
+            for t, r in sorted(fetch_warnings.items())
+        ]
+
         return jsonify({
             "long":      ranked["long"],
             "short":     ranked["short"],
             "timestamp": timestamp,
+            "warnings":  warnings,
         })
 
     except Exception as e:

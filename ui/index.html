@@ -736,6 +736,20 @@
   </div>
 
   <!-- ================================================================ -->
+  <!-- Warnings strip (skipped tickers)                                 -->
+  <!-- ================================================================ -->
+  <div id="warnings-strip" role="status" style="display:none;
+    background:#422006; border-bottom:1px solid #92400e;
+    padding:8px 24px; font-size:12px; color:#fcd34d;
+    display:none; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+    <span style="font-weight:700; white-space:nowrap;">⚠ Skipped tickers:</span>
+    <span id="warnings-list" style="flex:1;"></span>
+    <button onclick="hideWarnings()" style="background:transparent;border:none;
+      color:#fcd34d;font-size:16px;cursor:pointer;padding:0 4px;line-height:1;
+      margin-left:auto;" aria-label="Dismiss warnings">×</button>
+  </div>
+
+  <!-- ================================================================ -->
   <!-- Main — two table cards                                            -->
   <!-- ================================================================ -->
   <main>
@@ -1159,6 +1173,7 @@
     const btnText   = document.getElementById('scan-btn-text');
 
     hideError();
+    hideWarnings();
     btn.disabled    = true;
     spinner.style.display = 'inline-block';
     btnText.textContent   = 'Scanning markets…';
@@ -1175,6 +1190,9 @@
 
       const ts = data.timestamp || new Date().toLocaleTimeString();
       document.getElementById('status-timestamp').textContent = 'Last scan: ' + ts;
+
+      // Show warnings for any skipped tickers
+      showWarnings(data.warnings || []);
 
     } catch (e) {
       showError('⚠️ Scan failed: ' + e.message + '. Please check your connection and try again.');
@@ -1245,6 +1263,21 @@
 
   function hideError() {
     document.getElementById('error-banner').classList.remove('visible');
+  }
+
+  function showWarnings(warnings) {
+    if (!warnings || warnings.length === 0) { hideWarnings(); return; }
+    const strip = document.getElementById('warnings-strip');
+    const list  = document.getElementById('warnings-list');
+    // Build "TICKER (reason), TICKER2 (reason2)" text
+    list.innerHTML = warnings
+      .map(w => `<strong>${_escHtml(w.ticker)}</strong> — ${_escHtml(w.reason)}`)
+      .join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+    strip.style.display = 'flex';
+  }
+
+  function hideWarnings() {
+    document.getElementById('warnings-strip').style.display = 'none';
   }
 
   // ------------------------------------------------------------------ //
