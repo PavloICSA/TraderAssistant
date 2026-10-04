@@ -61,20 +61,39 @@ def _normalise(df: pd.DataFrame, ticker: str, timeframe: str) -> pd.DataFrame:
 
 
 def _fetch_one(ticker: str, period: str, interval: str) -> tuple[str, pd.DataFrame | None, str | None]:
-    """Fetch OHLCV for a single ticker. Returns (ticker, df, error_msg)."""
-    try:
-        raw = yf.download(
-            ticker,
-            period=period,
-            interval=interval,
-            auto_adjust=True,
-            progress=False,
-        )
-        return ticker, _normalise(raw, ticker, interval), None
-    except DataFetchError as e:
-        return ticker, None, str(e)
-    except Exception as e:
-        return ticker, None, f"{ticker} ({interval}): unexpected error — {e}"
+    """
+    Fetch OHLCV for a single ticker. Returns (ticker, df, error_msg).
+
+    If the ticker returns empty data and doesn't already end in '-USD',
+    automatically retries with '-USD' appended (handles crypto symbols like
+    SOL → SOL-USD, BNB → BNB-USD).  The original ticker key is preserved
+    in the result so the rest of the pipeline is unaffected.
+    """
+    def _try(sym: str) -> tuple[pd.DataFrame | None, str | None]:
+        try:
+            raw = yf.download(
+                sym,
+                period=period,
+                interval=interval,
+                auto_adjust=True,
+                progress=False,
+            )
+            return _normalise(raw, sym, interval), None
+        except DataFetchError as e:
+            return None, str(e)
+        except Exception as e:
+            return None, f"{sym} ({interval}): unexpected error — {e}"
+
+    df, err = _try(ticker)
+
+    # Auto-retry with -USD suffix for crypto symbols entered without it
+    if df is None and not ticker.upper().endswith("-USD"):
+        df_retry, err_retry = _try(ticker + "-USD")
+        if df_retry is not None:
+            return ticker, df_retry, None   # success — keep original ticker key
+        # Both failed; return the original error (more recognisable to the user)
+
+    return ticker, df, err
 
 
 def fetch_daily(tickers: list[str]) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
