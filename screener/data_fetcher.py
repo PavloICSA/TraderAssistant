@@ -2,22 +2,78 @@
 Data fetcher — fetches OHLCV data from Yahoo Finance via yfinance.
 
 Provides:
-  fetch_daily(tickers)  -> dict[str, pd.DataFrame]  (90-day lookback, 1d interval)
-  fetch_1h(tickers)     -> dict[str, pd.DataFrame]  (30-day lookback, 1h interval)
+  fetch_daily(tickers)  -> tuple[dict[str, pd.DataFrame], dict[str, str]]
+  fetch_1h(tickers)     -> tuple[dict[str, pd.DataFrame], dict[str, str]]
 
 Each DataFrame has columns: Open, High, Low, Close, Volume (float64).
-Raises DataFetchError when a network failure or empty response occurs.
+Returns (results, failed) where failed maps ticker -> error reason.
+Raises DataFetchError only when ALL tickers fail.
 
-Fetches are parallelised with ThreadPoolExecutor (MAX_WORKERS threads) to
-keep scan time reasonable for large watchlists.
+Symbol normalisation (_candidates):
+  Users may enter symbols in natural formats across all asset classes.
+  The fetcher tries an ordered candidate chain per ticker:
+    Stocks/ETFs/indices  →  AAPL, SPY, ^VIX  (pass through)
+    Crypto bare          →  SOL → [SOL, SOL-USD]
+    Forex                →  EURUSD / EUR/USD → [EURUSD=X]
+    Futures roots        →  GC / CL → [GC=F, GC]
+
+Fetches are parallelised with ThreadPoolExecutor (MAX_WORKERS threads).
 """
 
+import re
 import yfinance as yf
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Maximum parallel yfinance requests — keeps us well clear of rate limits
 MAX_WORKERS = 10
+
+# ---------------------------------------------------------------------------
+# Known futures roots → Yahoo =F suffix
+# ---------------------------------------------------------------------------
+_FUTURES_ROOTS = {
+    "GC", "SI", "HG", "PL", "PA",           # metals
+    "CL", "NG", "RB", "HO", "BZ",           # energy
+    "ZW", "ZC", "ZS", "ZO", "ZR",           # grains
+    "CC", "KC", "SB", "CT",                  # softs
+    "ES", "NQ", "YM", "RTY",                 # equity index futures
+}
+
+# ---------------------------------------------------------------------------
+# Symbol normalisation
+# ---------------------------------------------------------------------------
+
+def _candidates(raw: str) -> list[str]:
+    """
+    Given a user-supplied symbol, return an ordered list of Yahoo Finance
+    candidates to try (most likely first).
+    """
+    s = raw.strip().upper()
+
+    # Already fully qualified — return as-is
+    if s.endswith("=X") or s.endswith("=F") or s.endswith("-USD"):
+        return [s]
+
+    # Index symbols
+    if s.startswith("^"):
+        return [s]
+
+    # Forex: strip common separators, check for two 3-letter currency codes
+    s_clean = re.sub(r"[/\-\s]", "", s)
+    if len(s_clean) == 6 and s_clean.isalpha():
+        _CURRENCIES = {
+            "USD","EUR","GBP","JPY","CHF","AUD","CAD","NZD","HKD","SGD",
+            "NOK","SEK","DKK","MXN","TRY","ZAR","CNY","CNH","INR","BRL",
+            "RUB","KRW","TWD","THB","PLN","CZK","HUF","ILS","CLP","COP",
+        }
+        if s_clean[:3] in _CURRENCIES and s_clean[3:] in _CURRENCIES:
+            return [s_clean + "=X"]
+
+    # Known futures root
+    if s in _FUTURES_ROOTS:
+        return [s + "=F", s]
+
+    # Default: try as-is, then with -USD (catches bare crypto like SOL, ADA)
+    return [s, s + "-USD"]
 
 
 class DataFetchError(Exception):
@@ -62,38 +118,28 @@ def _normalise(df: pd.DataFrame, ticker: str, timeframe: str) -> pd.DataFrame:
 
 def _fetch_one(ticker: str, period: str, interval: str) -> tuple[str, pd.DataFrame | None, str | None]:
     """
-    Fetch OHLCV for a single ticker. Returns (ticker, df, error_msg).
-
-    If the ticker returns empty data and doesn't already end in '-USD',
-    automatically retries with '-USD' appended (handles crypto symbols like
-    SOL → SOL-USD, BNB → BNB-USD).  The original ticker key is preserved
-    in the result so the rest of the pipeline is unaffected.
+    Fetch OHLCV for a single ticker using the _candidates resolution chain.
+    Returns (ticker, df, error_msg) — ticker key is always the original
+    user-supplied symbol regardless of which candidate succeeded.
     """
-    def _try(sym: str) -> tuple[pd.DataFrame | None, str | None]:
+    last_err = None
+    for candidate in _candidates(ticker):
         try:
             raw = yf.download(
-                sym,
+                candidate,
                 period=period,
                 interval=interval,
                 auto_adjust=True,
                 progress=False,
             )
-            return _normalise(raw, sym, interval), None
+            df = _normalise(raw, candidate, interval)
+            return ticker, df, None          # success — keep original key
         except DataFetchError as e:
-            return None, str(e)
+            last_err = str(e)
         except Exception as e:
-            return None, f"{sym} ({interval}): unexpected error — {e}"
+            last_err = f"{candidate} ({interval}): unexpected error — {e}"
 
-    df, err = _try(ticker)
-
-    # Auto-retry with -USD suffix for crypto symbols entered without it
-    if df is None and not ticker.upper().endswith("-USD"):
-        df_retry, err_retry = _try(ticker + "-USD")
-        if df_retry is not None:
-            return ticker, df_retry, None   # success — keep original ticker key
-        # Both failed; return the original error (more recognisable to the user)
-
-    return ticker, df, err
+    return ticker, None, last_err or f"No data found for {ticker}."
 
 
 def fetch_daily(tickers: list[str]) -> tuple[dict[str, pd.DataFrame], dict[str, str]]:
