@@ -19,6 +19,10 @@ from screener.scorer             import score_tickers
 
 app = Flask(__name__, static_folder="ui", static_url_path="")
 
+import logging
+logging.basicConfig(level=logging.INFO)
+app.logger.setLevel(logging.INFO)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
@@ -87,6 +91,28 @@ def put_watchlist():
         return jsonify({"error": f"Failed to update watchlist: {str(e)}"}), 500
 
 
+@app.route("/api/debug/fetch/<ticker>", methods=["GET"])
+def debug_fetch(ticker):
+    """Debug endpoint: test raw yfinance fetch for a ticker. Remove before shipping."""
+    import traceback
+    ticker = ticker.upper()
+    results = {}
+    try:
+        data, failed = fetch_daily([ticker])
+        results["daily_rows"] = len(data.get(ticker, [])) if ticker in data else 0
+        results["daily_failed"] = failed.get(ticker, None)
+    except Exception as e:
+        results["daily_error"] = str(e)
+        results["daily_tb"] = traceback.format_exc()
+    try:
+        data2, failed2 = fetch_1h([ticker])
+        results["1h_rows"] = len(data2.get(ticker, [])) if ticker in data2 else 0
+        results["1h_failed"] = failed2.get(ticker, None)
+    except Exception as e:
+        results["1h_error"] = str(e)
+    return jsonify(results)
+
+
 @app.route("/api/chart/<ticker>/<timeframe>", methods=["GET"])
 def get_chart(ticker, timeframe):
     """
@@ -100,13 +126,34 @@ def get_chart(ticker, timeframe):
         if timeframe not in ("daily", "1h"):
             return jsonify({"error": "Invalid timeframe. Use 'daily' or '1h'."}), 400
 
-        if timeframe == "daily":
-            data, _ = fetch_daily([ticker])
-        else:
-            data, _ = fetch_1h([ticker])
+        # Try up to 3 times — yfinance can transiently fail under thread contention
+        data = {}
+        last_error = None
+        for attempt in range(3):
+            try:
+                if timeframe == "daily":
+                    data, failed = fetch_daily([ticker])
+                else:
+                    data, failed = fetch_1h([ticker])
+
+                if ticker in data:
+                    break  # success
+
+                # Fetch returned but ticker missing — check failed dict for reason
+                last_error = failed.get(ticker, f"No data returned for {ticker}.")
+                app.logger.warning(f"Chart attempt {attempt+1} failed for {ticker}/{timeframe}: {last_error}")
+
+            except DataFetchError as e:
+                last_error = str(e)
+                app.logger.warning(f"Chart attempt {attempt+1} DataFetchError for {ticker}/{timeframe}: {e}")
+
+            if attempt < 2:
+                import time
+                time.sleep(0.5)  # brief pause before retry
 
         if ticker not in data:
-            return jsonify({"error": f"No data available for {ticker}."}), 404
+            app.logger.error(f"Chart fetch exhausted retries for {ticker}/{timeframe}: {last_error}")
+            return jsonify({"error": f"Unable to load chart data for {ticker}. {last_error or ''}".strip()}), 404
 
         df = data[ticker]
 
@@ -132,9 +179,8 @@ def get_chart(ticker, timeframe):
             "candles":   candles,
         })
 
-    except DataFetchError as e:
-        return jsonify({"error": f"Unable to fetch chart data: {e}"}), 500
     except Exception as e:
+        app.logger.error(f"Chart endpoint error for {ticker}/{timeframe}: {e}")
         return jsonify({"error": f"Chart error: {e}"}), 500
 
 
