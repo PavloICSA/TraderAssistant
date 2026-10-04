@@ -101,9 +101,9 @@ def get_chart(ticker, timeframe):
             return jsonify({"error": "Invalid timeframe. Use 'daily' or '1h'."}), 400
 
         if timeframe == "daily":
-            data = fetch_daily([ticker])
+            data, _ = fetch_daily([ticker])
         else:
-            data = fetch_1h([ticker])
+            data, _ = fetch_1h([ticker])
 
         if ticker not in data:
             return jsonify({"error": f"No data available for {ticker}."}), 404
