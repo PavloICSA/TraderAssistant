@@ -850,6 +850,16 @@
   <div id="modal">
     <h3 id="modal-title">Edit Watchlist</h3>
     <p class="modal-hint">Add or remove ticker symbols. Changes take effect on the next scan.</p>
+    <p class="modal-hint" style="margin-top:4px;">
+      <strong style="color:var(--text-muted);">Supported formats:</strong>
+      Stocks <span class="signal-tag">AAPL</span>
+      · ETFs <span class="signal-tag">SPY</span>
+      · Indices <span class="signal-tag">^VIX</span>
+      · Crypto <span class="signal-tag">SOL</span> <span class="signal-tag">BTC-USD</span>
+      · Forex <span class="signal-tag">EURUSD</span> <span class="signal-tag">EUR/USD</span>
+      · Futures <span class="signal-tag">GC</span> <span class="signal-tag">CL</span>
+      · Commodity ETFs <span class="signal-tag">GLD</span>
+    </p>
 
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
       <input id="chip-search" type="text" placeholder="Filter tickers…"
@@ -933,6 +943,59 @@
 
         <h3>Tie-breaking sort order</h3>
         <p>Equal scores are broken by: <strong>1h volume</strong> (higher first) → <strong>absolute 1h % change</strong> → <strong>alphabetical</strong> by ticker.</p>
+
+        <h3>Supported symbols</h3>
+        <p>The screener automatically resolves symbol formats across all major asset classes. You can type symbols naturally — no need to know Yahoo Finance's internal format.</p>
+
+        <table class="score-table">
+          <thead><tr><th>Asset class</th><th>Examples you can type</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>US Stocks</td>
+              <td><span class="signal-tag">AAPL</span> <span class="signal-tag">TSLA</span> <span class="signal-tag">NVDA</span></td>
+              <td>Standard ticker symbols</td>
+            </tr>
+            <tr>
+              <td>ETFs</td>
+              <td><span class="signal-tag">SPY</span> <span class="signal-tag">QQQ</span> <span class="signal-tag">GLD</span> <span class="signal-tag">SLV</span> <span class="signal-tag">USO</span></td>
+              <td>Including commodity and sector ETFs</td>
+            </tr>
+            <tr>
+              <td>Market Indices</td>
+              <td><span class="signal-tag">^VIX</span> <span class="signal-tag">^GSPC</span> <span class="signal-tag">^DJI</span></td>
+              <td>Prefix with <code>^</code> for indices</td>
+            </tr>
+            <tr>
+              <td>Crypto</td>
+              <td><span class="signal-tag">BTC</span> <span class="signal-tag">SOL</span> <span class="signal-tag">ETH</span> <span class="signal-tag">ADA</span> <span class="signal-tag">BTC-USD</span></td>
+              <td>Bare symbol or with <code>-USD</code> — both work. Major tokens only; obscure meme coins may not have data.</td>
+            </tr>
+            <tr>
+              <td>Forex Pairs</td>
+              <td><span class="signal-tag">EURUSD</span> <span class="signal-tag">EUR/USD</span> <span class="signal-tag">USDJPY</span> <span class="signal-tag">GBP/JPY</span></td>
+              <td>6-letter pair with or without <code>/</code> separator. Covers all major and most minor currency pairs.</td>
+            </tr>
+            <tr>
+              <td>Metals Futures</td>
+              <td><span class="signal-tag">GC</span> <span class="signal-tag">SI</span> <span class="signal-tag">HG</span> <span class="signal-tag">PL</span></td>
+              <td>Gold, Silver, Copper, Platinum. Auto-appends <code>=F</code>.</td>
+            </tr>
+            <tr>
+              <td>Energy Futures</td>
+              <td><span class="signal-tag">CL</span> <span class="signal-tag">NG</span> <span class="signal-tag">RB</span> <span class="signal-tag">BZ</span></td>
+              <td>Crude Oil, Natural Gas, Gasoline, Brent. Auto-appends <code>=F</code>.</td>
+            </tr>
+            <tr>
+              <td>Grain Futures</td>
+              <td><span class="signal-tag">ZW</span> <span class="signal-tag">ZC</span> <span class="signal-tag">ZS</span></td>
+              <td>Wheat, Corn, Soybeans. Auto-appends <code>=F</code>.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p style="font-size:12px; color:var(--text-faint); margin-top:-4px;">
+          If a symbol fails to load, it will appear in the <strong style="color:#fcd34d;">⚠ Skipped tickers</strong> warning strip after the scan. Try appending <code>-USD</code> for crypto, <code>=X</code> for forex, or <code>=F</code> for futures if the bare symbol doesn't resolve.
+        </p>
 
         <h3>Important limitations</h3>
         <ul>
