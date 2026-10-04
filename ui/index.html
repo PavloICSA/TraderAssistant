@@ -1355,14 +1355,14 @@
   let _chartActiveTf = 'daily';
   let _activeRow     = null;   // currently highlighted <tr>
 
-  // Load lightweight-charts from CDN on first chart open (lazy)
+  // Load lightweight-charts from local bundle (no CDN dependency)
   function _ensureLwCharts() {
     return new Promise((resolve, reject) => {
       if (window.LightweightCharts) { resolve(); return; }
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js';
+      s.src = '/vendor/lightweight-charts.js';
       s.onload  = resolve;
-      s.onerror = () => reject(new Error('Failed to load chart library. Check your internet connection.'));
+      s.onerror = () => reject(new Error('Failed to load chart library (vendor/lightweight-charts.js).'));
       document.head.appendChild(s);
     });
   }
@@ -1433,7 +1433,6 @@
       const res  = await fetch(`/api/chart/${encodeURIComponent(_chartTicker)}/${_chartActiveTf}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Chart data unavailable');
-
       loadEl.style.display = 'none';
       contEl.style.display = 'block';
       document.getElementById('chart-panel-meta').textContent =
