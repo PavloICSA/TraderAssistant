@@ -91,28 +91,6 @@ def put_watchlist():
         return jsonify({"error": f"Failed to update watchlist: {str(e)}"}), 500
 
 
-@app.route("/api/debug/fetch/<ticker>", methods=["GET"])
-def debug_fetch(ticker):
-    """Debug endpoint: test raw yfinance fetch for a ticker. Remove before shipping."""
-    import traceback
-    ticker = ticker.upper()
-    results = {}
-    try:
-        data, failed = fetch_daily([ticker])
-        results["daily_rows"] = len(data.get(ticker, [])) if ticker in data else 0
-        results["daily_failed"] = failed.get(ticker, None)
-    except Exception as e:
-        results["daily_error"] = str(e)
-        results["daily_tb"] = traceback.format_exc()
-    try:
-        data2, failed2 = fetch_1h([ticker])
-        results["1h_rows"] = len(data2.get(ticker, [])) if ticker in data2 else 0
-        results["1h_failed"] = failed2.get(ticker, None)
-    except Exception as e:
-        results["1h_error"] = str(e)
-    return jsonify(results)
-
-
 @app.route("/api/chart/<ticker>/<timeframe>", methods=["GET"])
 def get_chart(ticker, timeframe):
     """
