@@ -112,6 +112,8 @@ python main.py
 
 A native desktop window opens immediately. No browser, no separate server start step.
 
+> **macOS note:** Port 5000 is reserved by macOS AirPlay Receiver (System Preferences → Sharing). The app uses port **5174** to avoid this conflict.
+
 **Demo recording:** Run `python main.py`, click "Run Fresh Scan", let the tables populate, show the LONG and SHORT ranked rows with reasoning. The config watchlist edit flow is a secondary demo beat.
 
 **Submission:** Public GitHub repository + short demo video. Local-only; no deployment required or planned.

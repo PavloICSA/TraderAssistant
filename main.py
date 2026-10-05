@@ -2,8 +2,10 @@
 Entry point for the Multi-Timeframe Stock Screener.
 
 Starts the Flask server on a background daemon thread, then opens a native
-desktop window via pywebview pointing at http://localhost:5000.
+desktop window via pywebview pointing at http://localhost:5174.
 pywebview.start() must run on the main thread (macOS requirement).
+
+Port 5174 is used to avoid conflict with macOS AirPlay Receiver on port 5000.
 """
 
 import threading
@@ -12,7 +14,7 @@ import webview
 from app import app
 
 HOST = "127.0.0.1"
-PORT = 5000
+PORT = 5174  # avoid macOS AirPlay (5000) and common dev server ports
 
 
 def _start_flask() -> None:
