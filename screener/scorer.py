@@ -85,20 +85,20 @@ _BEARISH_KEYWORDS = [
 # Signal type labels used to detect MTF alignment pairs
 # Each entry: (keyword_in_signal_string, display_label)
 _INDICATOR_TYPES = [
-    ("macd bullish",       "MACD bullish crossover"),
-    ("macd bearish",       "MACD bearish crossover"),
-    ("lower bb",           "Lower BB touch"),
-    ("upper bb",           "Upper BB touch"),
-    ("rsi oversold",       "RSI oversold"),
-    ("rsi overbought",     "RSI overbought"),
-    ("hammer",             "Hammer"),
-    ("bullish engulfing",  "Bullish Engulfing"),
-    ("morning star",       "Morning Star"),
-    ("bullish doji",       "Bullish Doji"),
-    ("shooting star",      "Shooting Star"),
-    ("bearish engulfing",  "Bearish Engulfing"),
-    ("evening star",       "Evening Star"),
-    ("bearish doji",       "Bearish Doji"),
+    ("macd bullish",          "MACD bullish crossover"),
+    ("macd bearish",          "MACD bearish crossover"),
+    ("lower bb",              "Lower BB mean-reversion"),
+    ("upper bb",              "Upper BB mean-reversion"),
+    ("rsi oversold",          "RSI oversold"),
+    ("rsi overbought",        "RSI overbought"),
+    ("hammer",                "Hammer"),
+    ("bullish engulfing",     "Bullish Engulfing"),
+    ("morning star",          "Morning Star"),
+    ("bullish doji",          "Bullish Doji"),
+    ("shooting star",         "Shooting Star"),
+    ("bearish engulfing",     "Bearish Engulfing"),
+    ("evening star",          "Evening Star"),
+    ("bearish doji",          "Bearish Doji"),
 ]
 
 

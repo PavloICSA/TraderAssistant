@@ -4,12 +4,12 @@ on an OHLCV DataFrame using the `ta` library.
 
 Bullish signals (contribute +1 to LONG score):
   - MACD bullish crossover  (MACD line crosses above signal line from below)
-  - Lower Bollinger Band touch/cross  (close <= lower band)
+  - Lower BB mean-reversion (body closed below lower band, next 1-2 candles close back inside)
   - RSI oversold  (RSI < 30)
 
 Bearish signals (contribute -1 to SHORT score):
   - MACD bearish crossover  (MACD line crosses below signal line from above)
-  - Upper Bollinger Band touch/cross  (close >= upper band)
+  - Upper BB mean-reversion (body closed above upper band, next 1-2 candles close back inside)
   - RSI overbought  (RSI > 70)
 
 All signals are evaluated on the last complete candle (index -1), using
@@ -87,9 +87,22 @@ def _macd_signals(df: pd.DataFrame, label: str) -> list[str]:
 
 def _bb_signals(df: pd.DataFrame, label: str) -> list[str]:
     """
-    Detect Bollinger Band lower-band touch (bullish) and upper-band touch (bearish)
-    on the last candle.
+    Detect Bollinger Band mean-reversion signals.
+
+    Rule (2-candle confirmation window):
+      LONG  — a candle body closed BELOW the lower band in the last 2 candles
+              (the breach), AND the most recent candle closed back ABOVE the
+              lower band (confirmation that the market rejected the move down).
+
+      SHORT — a candle body closed ABOVE the upper band in the last 2 candles
+              (the breach), AND the most recent candle closed back BELOW the
+              upper band (confirmation that the market rejected the move up).
+
+    This filters out continued breakouts and only signals when price has
+    returned inside the bands, confirming a genuine mean-reversion setup.
     """
+    # Need enough rows for BB calculation (BB_PERIOD) plus the 3-candle
+    # inspection window — positions [-1], [-2], [-3] are within the series.
     if len(df) < BB_PERIOD + 2:
         return []
 
@@ -104,16 +117,40 @@ def _bb_signals(df: pd.DataFrame, label: str) -> list[str]:
     except Exception:
         return []
 
-    if upper.isna().iloc[-1] or lower.isna().iloc[-1]:
+    # Need all values in our window to be non-NaN
+    if any(upper.iloc[i] != upper.iloc[i] or lower.iloc[i] != lower.iloc[i]
+           for i in [-1, -2, -3]):
         return []
 
-    close = df["Close"].iloc[-1]
+    # Candle positions:
+    #   [-1] = most recent complete candle  → confirmation candle
+    #   [-2] = one candle back              \  breach window
+    #   [-3] = two candles back             /  (2-candle window)
+
+    close_now   = float(df["Close"].iloc[-1])
+    upper_now   = float(upper.iloc[-1])
+    lower_now   = float(lower.iloc[-1])
+
+    # Check if a breach occurred in the 2-candle window before the current candle
+    breach_below = any(
+        float(df["Close"].iloc[i]) < float(lower.iloc[i])
+        for i in [-2, -3]
+    )
+    breach_above = any(
+        float(df["Close"].iloc[i]) > float(upper.iloc[i])
+        for i in [-2, -3]
+    )
+
     signals = []
 
-    if close <= lower.iloc[-1]:
-        signals.append(f"Lower BB touch ({label})")
-    if close >= upper.iloc[-1]:
-        signals.append(f"Upper BB touch ({label})")
+    # LONG: breach below lower band → confirmed by close back inside (above lower)
+    if breach_below and close_now > lower_now:
+        signals.append(f"Lower BB mean-reversion ({label})")
+
+    # SHORT: breach above upper band → confirmed by close back inside (below upper)
+    if breach_above and close_now < upper_now:
+        signals.append(f"Upper BB mean-reversion ({label})")
+
     return signals
 
 
