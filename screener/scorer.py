@@ -70,6 +70,7 @@ _BULLISH_KEYWORDS = [
     "macd bullish",
     "lower bb",
     "rsi oversold",
+    "ols trend reversal up",
 ]
 
 _BEARISH_KEYWORDS = [
@@ -80,6 +81,7 @@ _BEARISH_KEYWORDS = [
     "macd bearish",
     "upper bb",
     "rsi overbought",
+    "ols trend reversal down",
 ]
 
 # Signal type labels used to detect MTF alignment pairs

@@ -1,16 +1,18 @@
 """
-Indicator signal detector — detects MACD, Bollinger Band, and RSI signals
-on an OHLCV DataFrame using the `ta` library.
+Indicator signal detector — detects MACD, Bollinger Band, RSI, and OLS
+trend-reversal signals on an OHLCV DataFrame using the `ta` library.
 
 Bullish signals (contribute +1 to LONG score):
   - MACD bullish crossover  (MACD line crosses above signal line from below)
   - Lower BB mean-reversion (body closed below lower band, next 1-2 candles close back inside)
   - RSI oversold  (RSI < 30)
+  - OLS trend reversal UP   (daily downtrend R²≥0.5, price crosses back above regression line)
 
 Bearish signals (contribute -1 to SHORT score):
   - MACD bearish crossover  (MACD line crosses below signal line from above)
   - Upper BB mean-reversion (body closed above upper band, next 1-2 candles close back inside)
   - RSI overbought  (RSI > 70)
+  - OLS trend reversal DOWN (daily uptrend R²≥0.5, price crosses back below regression line)
 
 All signals are evaluated on the last complete candle (index -1), using
 candle -2 as the prior candle for crossover detection.
@@ -18,9 +20,10 @@ candle -2 as the prior candle for crossover detection.
 Public API:
   detect_indicators(df, timeframe_label) -> list[str]
     Returns a list of fired signal strings, e.g.
-    ["MACD bullish crossover (1h)", "RSI oversold (daily)"]
+    ["MACD bullish crossover (1h)", "OLS trend reversal DOWN (daily)"]
 """
 
+import numpy as np
 import pandas as pd
 import ta
 from screener.pattern_detector import _candle_label
@@ -43,6 +46,10 @@ RSI_OVERBOUGHT = 70
 
 # Minimum rows needed: MACD slow period + signal period as a safe buffer
 MIN_ROWS = MACD_SLOW + MACD_SIGNAL + 5
+
+# OLS trend-reversal parameters
+OLS_LOOKBACK  = 20     # number of daily candles for regression window
+OLS_MIN_R2    = 0.5    # minimum R² to consider the trend reliable enough to act on
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +190,86 @@ def _rsi_signals(df: pd.DataFrame, label: str) -> list[str]:
     return signals
 
 
+def _ols_trend_reversal(df: pd.DataFrame, label: str) -> list[str]:
+    """
+    Detect OLS linear regression trend reversals (daily timeframe only).
+
+    Algorithm:
+      1. Fit OLS regression through the last OLS_LOOKBACK closes.
+      2. Compute R² — if below OLS_MIN_R2 the trend is too choppy to act on.
+      3. Determine trend direction from the slope (positive = uptrend, negative = downtrend).
+      4. Compute the regression line value at each candle position.
+      5. A VIOLATION occurs when:
+           - Uptrend:   price was ABOVE regression line on candle[-2]
+                        AND closes BELOW it on candle[-1]  → bearish reversal signal
+           - Downtrend: price was BELOW regression line on candle[-2]
+                        AND closes ABOVE it on candle[-1]  → bullish reversal signal
+
+    Only fires on daily timeframe (caller must pass label containing 'daily').
+    """
+    # Only applies to daily timeframe
+    if "daily" not in label.lower():
+        return []
+
+    if df is None or len(df) < OLS_LOOKBACK + 1:
+        return []
+
+    # Extract the lookback window (include one extra candle for the prior position)
+    window = df["Close"].iloc[-(OLS_LOOKBACK + 1):].values.astype(float)
+    n = len(window)   # = OLS_LOOKBACK + 1
+
+    # --- OLS fit ---
+    x = np.arange(n, dtype=float)
+    x_mean = x.mean()
+    y_mean = window.mean()
+
+    ss_xy = np.sum((x - x_mean) * (window - y_mean))
+    ss_xx = np.sum((x - x_mean) ** 2)
+
+    if ss_xx == 0:
+        return []   # all prices identical — no trend
+
+    slope     = ss_xy / ss_xx
+    intercept = y_mean - slope * x_mean
+
+    # --- R² ---
+    y_pred  = slope * x + intercept
+    ss_res  = np.sum((window - y_pred) ** 2)
+    ss_tot  = np.sum((window - y_mean) ** 2)
+
+    r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+    if r2 < OLS_MIN_R2:
+        return []   # trend too noisy — skip
+
+    # Regression line values at the last two positions
+    reg_prev = y_pred[-2]   # regression value at candle[-2]
+    reg_now  = y_pred[-1]   # regression value at candle[-1] (most recent)
+
+    close_prev = float(window[-2])
+    close_now  = float(window[-1])
+
+    slope_pct = slope / y_mean * 100   # slope as % of mean price — for display
+
+    signals = []
+
+    # Uptrend violation → bearish reversal signal
+    if slope > 0 and close_prev > reg_prev and close_now < reg_now:
+        signals.append(
+            f"OLS trend reversal DOWN ({label})  "
+            f"[slope={slope_pct:+.2f}%/bar, R²={r2:.2f}]"
+        )
+
+    # Downtrend violation → bullish reversal signal
+    if slope < 0 and close_prev < reg_prev and close_now > reg_now:
+        signals.append(
+            f"OLS trend reversal UP ({label})  "
+            f"[slope={slope_pct:+.2f}%/bar, R²={r2:.2f}]"
+        )
+
+    return signals
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -206,6 +293,7 @@ def detect_indicators(df: pd.DataFrame, timeframe_label: str) -> list[str]:
     signals.extend(_macd_signals(df, label))
     signals.extend(_bb_signals(df, label))
     signals.extend(_rsi_signals(df, label))
+    signals.extend(_ols_trend_reversal(df, label))
     return signals
 
 
