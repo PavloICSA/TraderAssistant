@@ -313,6 +313,19 @@
       white-space: nowrap;
     }
 
+    .trend-tag {
+      display: inline-block;
+      border-radius: 3px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: var(--mono);
+      margin: 2px 2px 2px 0;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .trend-tag-up   { background: #14291a; border: 1px solid #166534; color: #4ade80; }
+    .trend-tag-down { background: #2a1215; border: 1px solid #7f1d1d; color: #f87171; }
+
     /* empty state row */
     .empty-row td {
       text-align: center;
@@ -1310,10 +1323,18 @@
         .map(s => `<span class="signal-tag">${_escHtml(s)}</span>`)
         .join(' ');
 
+      // Trend context tag (informational — not scored)
+      let trendTag = '';
+      if (row.trend) {
+        const isUp   = row.trend.includes('Uptrend');
+        const cls    = isUp ? 'trend-tag-up' : 'trend-tag-down';
+        trendTag = `<span class="trend-tag ${cls}">${_escHtml(row.trend)}</span> `;
+      }
+
       tr.innerHTML = `
         <td class="td-ticker">${_escHtml(row.ticker)}</td>
         <td class="td-score ${scoreClass}">${scoreDisplay}</td>
-        <td class="td-signals">${signalTags || '<span style="color:var(--text-faint)">—</span>'}</td>
+        <td class="td-signals">${trendTag}${signalTags || '<span style="color:var(--text-faint)">—</span>'}</td>
       `;
 
       // Click → open chart panel

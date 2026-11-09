@@ -190,6 +190,64 @@ def _rsi_signals(df: pd.DataFrame, label: str) -> list[str]:
     return signals
 
 
+def _ols_fit(df: pd.DataFrame) -> tuple[float, float, float] | None:
+    """
+    Shared OLS computation used by both the reversal detector and the trend
+    context summary.
+
+    Returns (slope, r2, slope_pct) or None if the data is insufficient or flat.
+    slope_pct is slope expressed as % of mean price per bar.
+    """
+    if df is None or len(df) < OLS_LOOKBACK + 1:
+        return None
+
+    window = df["Close"].iloc[-(OLS_LOOKBACK + 1):].values.astype(float)
+    n = len(window)
+    x = np.arange(n, dtype=float)
+    x_mean, y_mean = x.mean(), window.mean()
+
+    ss_xy = np.sum((x - x_mean) * (window - y_mean))
+    ss_xx = np.sum((x - x_mean) ** 2)
+    if ss_xx == 0:
+        return None
+
+    slope = ss_xy / ss_xx
+    intercept = y_mean - slope * x_mean
+    y_pred = slope * x + intercept
+
+    ss_res = np.sum((window - y_pred) ** 2)
+    ss_tot = np.sum((window - y_mean) ** 2)
+    r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+    slope_pct = slope / y_mean * 100
+
+    return slope, r2, slope_pct
+
+
+def get_trend_context(df_daily: pd.DataFrame) -> str | None:
+    """
+    Return a human-readable trend context string for display in the dashboard.
+    Only returned when R² ≥ OLS_MIN_R2 (reliable trend).
+    Returns None when trend is below threshold or data is insufficient.
+
+    Example output:
+      "📈 Uptrend | slope +0.41%/bar | R²=0.83 (20-day OLS)"
+      "📉 Downtrend | slope -0.38%/bar | R²=0.71 (20-day OLS)"
+    """
+    result = _ols_fit(df_daily)
+    if result is None:
+        return None
+
+    slope, r2, slope_pct = result
+    if r2 < OLS_MIN_R2:
+        return None
+
+    direction = "📈 Uptrend" if slope > 0 else "📉 Downtrend"
+    return (
+        f"{direction} | slope {slope_pct:+.2f}%/bar | "
+        f"R²={r2:.2f} ({OLS_LOOKBACK}-day OLS)"
+    )
+
+
 def _ols_trend_reversal(df: pd.DataFrame, label: str) -> list[str]:
     """
     Detect OLS linear regression trend reversals (daily timeframe only).
@@ -211,45 +269,29 @@ def _ols_trend_reversal(df: pd.DataFrame, label: str) -> list[str]:
     if "daily" not in label.lower():
         return []
 
-    if df is None or len(df) < OLS_LOOKBACK + 1:
+    result = _ols_fit(df)
+    if result is None:
         return []
 
-    # Extract the lookback window (include one extra candle for the prior position)
-    window = df["Close"].iloc[-(OLS_LOOKBACK + 1):].values.astype(float)
-    n = len(window)   # = OLS_LOOKBACK + 1
-
-    # --- OLS fit ---
-    x = np.arange(n, dtype=float)
-    x_mean = x.mean()
-    y_mean = window.mean()
-
-    ss_xy = np.sum((x - x_mean) * (window - y_mean))
-    ss_xx = np.sum((x - x_mean) ** 2)
-
-    if ss_xx == 0:
-        return []   # all prices identical — no trend
-
-    slope     = ss_xy / ss_xx
-    intercept = y_mean - slope * x_mean
-
-    # --- R² ---
-    y_pred  = slope * x + intercept
-    ss_res  = np.sum((window - y_pred) ** 2)
-    ss_tot  = np.sum((window - y_mean) ** 2)
-
-    r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-
+    slope, r2, slope_pct = result
     if r2 < OLS_MIN_R2:
         return []   # trend too noisy — skip
 
-    # Regression line values at the last two positions
-    reg_prev = y_pred[-2]   # regression value at candle[-2]
-    reg_now  = y_pred[-1]   # regression value at candle[-1] (most recent)
+    # Reconstruct regression line values for the last two candles
+    window = df["Close"].iloc[-(OLS_LOOKBACK + 1):].values.astype(float)
+    n = len(window)
+    x = np.arange(n, dtype=float)
+    x_mean, y_mean = x.mean(), window.mean()
+    ss_xy = np.sum((x - x_mean) * (window - y_mean))
+    ss_xx = np.sum((x - x_mean) ** 2)
+    slope_raw = ss_xy / ss_xx
+    intercept = y_mean - slope_raw * x_mean
+    y_pred = slope_raw * x + intercept
 
+    reg_prev   = float(y_pred[-2])
+    reg_now    = float(y_pred[-1])
     close_prev = float(window[-2])
     close_now  = float(window[-1])
-
-    slope_pct = slope / y_mean * 100   # slope as % of mean price — for display
 
     signals = []
 

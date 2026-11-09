@@ -246,14 +246,16 @@ def score_tickers(
         indicator_signals: {ticker: [signal_str, ...]} from indicator_detector
         hourly_data:       {ticker: DataFrame}         from data_fetcher.fetch_1h
         daily_data:        {ticker: DataFrame}         from data_fetcher.fetch_daily
-                           (optional; SMA50 filter disabled if not provided)
+                           (optional; SMA50 filter and trend context disabled if not provided)
 
     Returns:
         {
-            "long":  [{"ticker": str, "score": int, "signals": [str]}, ...],
-            "short": [{"ticker": str, "score": int, "signals": [str]}, ...],
+            "long":  [{"ticker": str, "score": int, "signals": [str], "trend": str|None}, ...],
+            "short": [{"ticker": str, "score": int, "signals": [str], "trend": str|None}, ...],
         }
     """
+    from screener.indicator_detector import get_trend_context
+
     all_tickers = set(pattern_signals) | set(indicator_signals)
     results = []
 
@@ -266,13 +268,12 @@ def score_tickers(
         # --- Base score ---
         base_score = sum(_classify(s) for s in signals)
         if base_score == 0:
-            continue  # no base signal — extensions don't apply
+            continue
 
         net_sign = 1 if base_score > 0 else -1
 
         # --- Extension 1: MTF Alignment Bonus ---
         mtf_bonus, mtf_badges = _mtf_alignment_bonus(signals)
-        # Bonus always deepens in the direction of base score
         mtf_adj = mtf_bonus * net_sign
 
         # --- Extension 2: Volume Confirmation ---
@@ -287,32 +288,33 @@ def score_tickers(
 
         # --- Final score ---
         final_score = base_score + mtf_adj + vol_adj + sma_adj
-
-        # Combine all signals: base + badges + vol + sma
         all_signals = signals + mtf_badges + vol_signals + sma_signals
 
-        # Re-check: if all adjustments cancelled the base score, exclude
         if final_score == 0:
             continue
+
+        # --- Trend context (informational, not scored) ---
+        trend_ctx = get_trend_context((daily_data or {}).get(ticker))
 
         results.append({
             "ticker":  ticker,
             "score":   final_score,
             "signals": all_signals,
+            "trend":   trend_ctx,
             "_vol":    _1h_volume(hourly_data.get(ticker)),
             "_pct":    _1h_abs_pct_change(hourly_data.get(ticker)),
         })
 
-    # Sort: descending absolute score → descending volume →
-    #       descending % change → ascending ticker (alphabetical)
     results.sort(key=lambda r: (-abs(r["score"]), -r["_vol"], -r["_pct"], r["ticker"]))
 
     long_list  = [
-        {"ticker": r["ticker"], "score": r["score"], "signals": r["signals"]}
+        {"ticker": r["ticker"], "score": r["score"],
+         "signals": r["signals"], "trend": r["trend"]}
         for r in results if r["score"] > 0
     ]
     short_list = [
-        {"ticker": r["ticker"], "score": r["score"], "signals": r["signals"]}
+        {"ticker": r["ticker"], "score": r["score"],
+         "signals": r["signals"], "trend": r["trend"]}
         for r in results if r["score"] < 0
     ]
 
